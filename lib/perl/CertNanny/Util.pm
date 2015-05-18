@@ -445,6 +445,8 @@ sub readFile {
         <$fh>;
       }
     }
+  } else {
+    $result = undef;
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " write file/content to disk");
@@ -481,13 +483,13 @@ sub writeFile {
   my $self = (shift)->getInstance();
   my %args = (@_);
 
-  my $rc = 0;
+  my $rc = 1;
   
   if ((!defined $args{SRCFILE} && !defined $args{SRCCONTENT}) || (defined $args{SRCFILE} && defined $args{SRCCONTENT})) {
     $rc = CertNanny::Logging->error('MSG', "writeFile(): Either SRCFILE or SRCCONTENT must be defined.");
   }
   
-  if (!$rc && !defined $args{DSTFILE}) {
+  if ($rc && !defined $args{DSTFILE}) {
     $rc = CertNanny::Logging->error('MSG', "writeFile(): Destination File DSTFILE must be defined.");
   }
 
@@ -495,11 +497,11 @@ sub writeFile {
   my $srccontent = $args{SRCCONTENT};
   my $dstfile    = $args{DSTFILE};
 
-  if (!$rc && (-e $dstfile) && (!$args{FORCE}) && (!$args{APPEND})) {
+  if ($rc && (-e $dstfile) && (!$args{FORCE}) && (!$args{APPEND})) {
     $rc = CertNanny::Logging->error('MSG', "writeFile(): output file already exists");
   }
 
-  if (!$rc && defined($srccontent)) {
+  if ($rc && defined($srccontent)) {
     my $mode = O_WRONLY;
     if (!-e $dstfile) {
       $mode |= O_EXCL | O_CREAT;
@@ -512,13 +514,14 @@ sub writeFile {
     my $fh;
     if (not sysopen($fh, $dstfile, $mode)) {
       $rc = CertNanny::Logging->error('MSG', "writeFile(): output file open failed");
+    } else {
+      binmode $fh;
+      print {$fh} $srccontent;
+      close $fh
     }
-    binmode $fh;
-    print {$fh} $srccontent;
-    close $fh
   }
   
-  if (!$rc && defined($srcfile)) {
+  if ($rc && defined($srcfile)) {
     if ($args{APPEND}) {
       if (!open OUT, '>>'.$dstfile) {
         $rc = CertNanny::Logging->error('MSG', "writeFile(): output file open failed");
@@ -528,11 +531,11 @@ sub writeFile {
         $rc = CertNanny::Logging->error('MSG', "writeFile(): output file open failed");
       }
     }
-    if (!$rc) {
+    if ($rc) {
       if (!open IN, $srcfile) {
         $rc = CertNanny::Logging->error('MSG', "writeFile(): input file open failed");
       }
-      if (!$rc) {
+      if ($rc) {
         binmode IN;
         binmode OUT;
         while (<IN>) {
@@ -544,7 +547,7 @@ sub writeFile {
     }
   }
   #CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " write file/content to disk");
-  return !$rc;
+  return $rc;
 } ## end sub writeFile
 
 
