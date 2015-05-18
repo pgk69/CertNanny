@@ -130,7 +130,7 @@ sub getCert {
   }
   
   if (defined $args{CERTFILE} && defined $args{CERTDATA}) {
-    $rc = CertNanny::Logging->error('MSG', "getCert(): Either CERTFILE or CERTDATA may be defined.");
+    $rc = !CertNanny::Logging->error('MSG', "getCert(): Either CERTFILE or CERTDATA may be defined.");
   }
 
   if (!$rc) {
@@ -146,7 +146,7 @@ sub getCert {
       }
       $certData = join("", @{CertNanny::Util->runCommand(\@cmd)->{STDOUT}});
       if (!$certData) {
-        $rc = CertNanny::Logging->error('MSG', "getCert(): Could not read instance certificate file $args{CERTFILE}");
+        $rc = !CertNanny::Logging->error('MSG', "getCert(): Could not read instance certificate file $args{CERTFILE}");
       }
     } else {
       $certData = $args{CERTDATA};
@@ -561,18 +561,18 @@ sub installRoots {
     my $installedRootCAs = $self->k_getAvailableRootCAs();
 
     if (!defined($installedRootCAs)) {
-      $rc = CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
     } else {
       # If this is ok, let's get the privat key
       my $myKey = $self->getKey();
       my $EECert;
       if (!defined($myKey)) {
-        $rc = CertNanny::Logging->error('MSG', "No private key found in " . $config->get("keystore.$entryname.location", 'FILE'));
+        $rc = !CertNanny::Logging->error('MSG', "No private key found in " . $config->get("keystore.$entryname.location", 'FILE'));
       } else {
         # now let's get the certificate
         $EECert = $self->getCert(CERTTYPE => 'EE');
         if (!defined($EECert)) {
-          $rc = CertNanny::Logging->error('MSG', "No EE cert found in " . $config->get("keystore.$entryname.location", 'FILE'));
+          $rc = !CertNanny::Logging->error('MSG', "No EE cert found in " . $config->get("keystore.$entryname.location", 'FILE'));
         } else {
           $EECert->{CERTINFO} = CertNanny::Util->getCertInfoHash(CERTDATA   => $EECert->{CERTDATA},
                                                                  CERTFORMAT => 'PEM');
@@ -616,7 +616,7 @@ sub installRoots {
             if (!CertNanny::Util->writeFile(SRCCONTENT => $pemCACert,
                                             DSTFILE    => $CAListFile,
                                             APPEND     => 1)) {
-              $rc = CertNanny::Logging->error('MSG', "Could not append Root CA into chainfile");        
+              $rc = !CertNanny::Logging->error('MSG', "Could not append Root CA into chainfile");
             } else {
               # and collect the certName in the Argumentlist
               push(@CAList, '-caname', CertNanny::Util->osq("$CN"));

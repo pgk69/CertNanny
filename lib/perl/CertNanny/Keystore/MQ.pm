@@ -1022,7 +1022,7 @@ sub installRoots {
     if (!defined($availableRootCAs)) {
       my $rootCertList = $self->k_getAvailableRootCerts();
       if (!defined($rootCertList)) {
-        $rc = CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+        $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
       }
   
       if (!$rc) {
@@ -1044,7 +1044,7 @@ sub installRoots {
     }
 
     if (!defined($availableRootCAs)) {
-      $rc = CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.dir", 'FILE'));
+      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.dir", 'FILE'));
     } else {
       #  my $locName = $self->_generateKeystore();
       $rc = 1 if (!$dest);
@@ -1093,7 +1093,7 @@ sub installRoots {
       
       # copy the temp keystore to $location an delete temp keystore
       if (!File::Copy::copy($dest, $origin)) {
-        $rc = CertNanny::Logging->error('MSG', "Could not copy new store <$dest> to current store <$origin>");
+        $rc = !CertNanny::Logging->error('MSG', "Could not copy new store <$dest> to current store <$origin>");
       } else {
         eval {unlink($dest)};
       }

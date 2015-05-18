@@ -353,8 +353,9 @@ sub getKey {
   my $entryname = $options->{ENTRYNAME};
   my $config    = $options->{CONFIG};
 
-  my $rc = undef;
-  
+  my $rc = 0;
+
+  my $openssl = $config->get('cmd.openssl', 'CMD');
   $alias ||= $entry->{alias};
   
   my @cmd;
@@ -371,32 +372,35 @@ sub getKey {
       $rc = join("", @{CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{STDOUT}});
       if ($rc) {
         chomp($rc);
-        $rc = CertNanny::Logging->error('MSG', "getKey(): keytool -importkeystore failed ($rc)");
+        $rc = !CertNanny::Logging->error('MSG', "getKey(): keytool -importkeystore failed ($rc)");
       }
     }
 
-    my $tmpFile = CertNanny::Util->getTmpFile();
-    CertNanny::Logging->info('MSG', "Extracting key <$alias> from <$tmpKeystore/$keystore> to tmp. file <$tmpFile> in format <PKCS12>.");
-    @cmd = (CertNanny::Util->osq("$options->{keytool}"), -importkeystore);
-    push(@cmd, -noprompt);
-    push(@cmd, -srckeystore   => CertNanny::Util->osq("$tmpKeystore"));
-    push(@cmd, -srcstorepass  => CertNanny::Util->osq("$entry->{store}->{pin}")) if ($entry->{store}->{pin});
-    push(@cmd, -srcalias      => CertNanny::Util->osq("$alias"));
-    push(@cmd, -srckeypass    => CertNanny::Util->osq("$entry->{store}->{pin}")) if ($entry->{store}->{pin});
-    push(@cmd, -destkeystore  => CertNanny::Util->osq("$tmpFile"));
-    push(@cmd, -deststorepass => CertNanny::Util->osq("$entry->{store}->{pin}")) if ($entry->{store}->{pin});
-    push(@cmd, -deststoretype => 'PKCS12');
+    if (!$rc) {
+      my $tmpFile = CertNanny::Util->getTmpFile();
+      CertNanny::Logging->info('MSG', "Extracting key <$alias> from <$tmpKeystore/$keystore> to tmp. file <$tmpFile> in format <PKCS12>.");
+      @cmd = (CertNanny::Util->osq("$options->{keytool}"), -importkeystore);
+      push(@cmd, -noprompt);
+      push(@cmd, -srckeystore   => CertNanny::Util->osq("$tmpKeystore"));
+      push(@cmd, -srcstorepass  => CertNanny::Util->osq("$entry->{store}->{pin}")) if ($entry->{store}->{pin});
+      push(@cmd, -srcalias      => CertNanny::Util->osq("$alias"));
+      push(@cmd, -srckeypass    => CertNanny::Util->osq("$entry->{store}->{pin}")) if ($entry->{store}->{pin});
+      push(@cmd, -destkeystore  => CertNanny::Util->osq("$tmpFile"));
+      push(@cmd, -deststorepass => CertNanny::Util->osq("$entry->{store}->{pin}")) if ($entry->{store}->{pin});
+      push(@cmd, -deststoretype => 'PKCS12');
   
-    $rc = join("", @{CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{STDOUT}});
-    if ($rc) {
-      chomp($rc);
-      $rc = CertNanny::Logging->error('MSG', "getKey(): keytool -importkeystore failed ($rc)");
+      $rc = join("", @{CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{STDOUT}});
+      if ($rc) {
+        chomp($rc);
+        $rc = !CertNanny::Logging->error('MSG', "getKey(): keytool -importkeystore failed ($rc)");
+      }
+      unlink($tmpKeystore);
     }
-    unlink($tmpKeystore);
     
-    my $openssl = $config->get('cmd.openssl', 'CMD');
-    if (!defined $openssl) {
-      $rc = CertNanny::Logging->error('MSG', "No openssl shell specified");
+    if (!$rc) {
+      if (!defined $openssl) {
+        $rc = !CertNanny::Logging->error('MSG', "No openssl shell specified");
+      }
     }
   
     if (!$rc) {
@@ -410,7 +414,7 @@ sub getKey {
       $rc = join("", @{CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{STDOUT}});
       delete $ENV{PIN};
       if (!$rc) {
-        $rc = CertNanny::Logging->error('MSG', "PKCS12 key extraction failed");
+        $rc = !CertNanny::Logging->error('MSG', "PKCS12 key extraction failed");
       } else {
         $rc = {KEYDATA   => $rc,
                KEYTYPE   => 'OpenSSL',
@@ -419,6 +423,7 @@ sub getKey {
       }
     }
   }
+  if ($rc == 1) {$rc = undef}
   
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get private key for main certificate from keystore");
   return $rc;
@@ -880,7 +885,7 @@ sub installRoots {
     my $certData;
     my $availableRootCAs = $self->k_getAvailableRootCAs();
     if (!defined($availableRootCAs)) {
-      $rc = CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
     } else {
       # build a new temp keystore; Start with a copy of the existing one
       my $locName = $self->_generateKeystore();
@@ -925,7 +930,7 @@ sub installRoots {
 
         # copy the temp keystore to $location an delete temp keystore
         if (!File::Copy::copy($locName, $entry->{location})) {
-          $rc = CertNanny::Logging->error('MSG', "Could not copy new store <$locName> to current store <$entry->{location}>");
+          $rc = !CertNanny::Logging->error('MSG', "Could not copy new store <$locName> to current store <$entry->{location}>");
         } else {
           eval {unlink($locName)};
         }

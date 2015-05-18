@@ -1109,7 +1109,7 @@ sub k_getNextTrustAnchor {
       if ($RDN[0] =~ $entry->{rootcaupdate}->{signerSubjectRegex}) {
         CertNanny::Logging->debug('MSG', "Subject signer check successful: " . $RDN[0]);
       } else {
-        $rc = CertNanny::Logging->error('MSG', "Subject signer check failed, new root CA cert WILL NOT BE ACCEPTED: " . $RDN[0]);
+        $rc = !CertNanny::Logging->error('MSG', "Subject signer check failed, new root CA cert WILL NOT BE ACCEPTED: " . $RDN[0]);
       }
 
       if (!$rc) {
@@ -1120,7 +1120,7 @@ sub k_getNextTrustAnchor {
         if ($IRDN[0] =~ $entry->{rootcaupdate}->{signerIssuerSubjectRegex}) {
           CertNanny::Logging->debug('MSG', "signer certificate issuer subject check successful: " . $IRDN[0]);
         } else {
-          $rc = CertNanny::Logging->error('MSG', "Signer certificate issuer subject check failed rootcerts WILL NOT BE ACCEPTED: " . $IRDN[0]);
+          $rc = !CertNanny::Logging->error('MSG', "Signer certificate issuer subject check failed rootcerts WILL NOT BE ACCEPTED: " . $IRDN[0]);
         }
       }
       
@@ -1128,7 +1128,7 @@ sub k_getNextTrustAnchor {
         my $signerCertInfo ;
         $signerCertInfo->{CERTINFO} = $signerCertificate;
         if (!$self->k_buildCertificateChain($signerCertInfo)) {
-          $rc = CertNanny::Logging->error('MSG', "Signer certificate NOT trusted against lokal root CA certs, rootcerts WILL NOT BE ACCEPTED: " . $RDN[0]);
+          $rc = !CertNanny::Logging->error('MSG', "Signer certificate NOT trusted against lokal root CA certs, rootcerts WILL NOT BE ACCEPTED: " . $RDN[0]);
         }
       }
 
@@ -1172,7 +1172,7 @@ sub k_getNextTrustAnchor {
                   if (!defined($pemCACert) || !defined($RootCertFile) || !CertNanny::Util->writeFile(SRCCONTENT => $pemCACert,
                                                                                                      DSTFILE    => $RootCertFile,
                                                                                                      FORCE      => 1)) {
-                    CertNanny::Logging->error('MSG', "Could not write new Root CA into trusted roots dir " . $entry->{TrustedRootCA}->{authoritative}->{dir});
+                    $rc = !CertNanny::Logging->error('MSG', "Could not write new Root CA into trusted roots dir " . $entry->{TrustedRootCA}->{authoritative}->{dir});
                     last;
                   }
                   ##delete new root CA cert from quarantine
@@ -1189,7 +1189,7 @@ sub k_getNextTrustAnchor {
                 if (!CertNanny::Util->writeFile(DSTFILE    => $newRootCertFile,
                                                 SRCCONTENT => $pemCACert,
                                                 FORCE      => 0)) {
-                  CertNanny::Logging->error('MSG', "Could not write new Root CA into quarantine dir");
+                  $rc = !CertNanny::Logging->error('MSG', "Could not write new Root CA into quarantine dir");
                   last;
                 }
               } else {
@@ -1408,7 +1408,7 @@ sub k_getInstalledNonRootCerts {
   # First fetch available root certificates
   my $availableRootCAs = $self->k_getAvailableRootCAs();
   if (!defined($availableRootCAs)) {
-    $rc = CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+    $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
   }
 
   if (!$rc) {
@@ -1695,7 +1695,7 @@ sub k_syncRootCAs {
   # First fetch available root certificates
   my $availableRootCAs = $self->k_getAvailableRootCAs();
   if (!defined($availableRootCAs)) {
-    $rc = CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+    $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
   }
 
   if (!$rc) {

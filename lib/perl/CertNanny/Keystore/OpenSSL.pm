@@ -220,7 +220,7 @@ sub getCert {
     $rc = $self->{CERT};
   } else {
     if (!defined $args{CERTFILE} && !defined $args{CERTDATA}) {$args{CERTFILE} = $entry->{location}}
-    if (defined $args{CERTFILE} && defined $args{CERTDATA}) {$rc = CertNanny::Logging->error('MSG', "getCert(): Either CERTFILE or CERTDATA may be defined.")}
+    if (defined $args{CERTFILE} && defined $args{CERTDATA}) {$rc = !CertNanny::Logging->error('MSG', "getCert(): Either CERTFILE or CERTDATA may be defined.")}
     if ($entry->{location} eq 'rootonly') {$rc = CertNanny::Logging->info('MSG', "getCert(): rootonly keystore with no EE no certificate ")}
   
 
@@ -229,7 +229,7 @@ sub getCert {
       if (defined $args{CERTFILE}) {
         $certData = CertNanny::Util->readFile($args{CERTFILE});
         if (!defined $certData) {
-          $rc = CertNanny::Logging->error('MSG', "getCert(): Could not read instance certificate file $args{CERTFILE}");
+          $rc = !CertNanny::Logging->error('MSG', "getCert(): Could not read instance certificate file $args{CERTFILE}");
           CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get main certificate from keystore");
         }
       } else {
@@ -934,14 +934,14 @@ sub generateKey {
       my $hsm = $self->{HSM};
       $outfile = $hsm->genkey();
       unless ($outfile) {
-        $rc = CertNanny::Logging->error('MSG', "HSM could not generate new key.");
+        $rc = !CertNanny::Logging->error('MSG', "HSM could not generate new key.");
       }
     } else {
       CertNanny::Logging->debug('MSG', "Generating a new key using native OpenSSL functionality.");
       # Todo pgk: Testen $config->get
       my $openssl = $config->get('cmd.openssl', 'CMD');
       if (!defined $openssl) {
-        $rc = CertNanny::Logging->error('MSG', "No openssl shell specified");
+        $rc = !CertNanny::Logging->error('MSG', "No openssl shell specified");
       }
 
       if (!$rc) {
@@ -963,7 +963,7 @@ sub generateKey {
         $ENV{PIN} = $pin;
         if (CertNanny::Util->runCommand(\@cmd)->{RC} != 0) {
           delete $ENV{PIN};
-          $rc = CertNanny::Logging->error('MSG', "RSA key generation failed");
+          $rc = !CertNanny::Logging->error('MSG', "RSA key generation failed");
         }
       }
     } ## end else [ if ($self->k_hasEngine()...)]
@@ -1043,16 +1043,16 @@ sub createPKCS12 {
   #}
   
   my $openssl = $config->get('cmd.openssl', 'CMD');
-  if (!defined $openssl)                 {$rc = CertNanny::Logging->error('MSG', "No openssl shell specified")}
-  if (!$rc && !defined $args{FILENAME})  {$rc = CertNanny::Logging->error('MSG', "createpks12(): No output file name specified")}
-  if (!$rc && !defined $args{CERTFILE})  {$rc = CertNanny::Logging->error('MSG', "createpks12(): No certificate file specified")}
-  if (!$rc && !defined $args{KEYFILE})   {$rc = CertNanny::Logging->error('MSG', "createpks12(): No key file specified")}
-  if (!$rc && !defined $args{EXPORTPIN}) {$rc = CertNanny::Logging->error('MSG', "createpks12(): No export PIN specified")}
+  if (!defined $openssl)                 {$rc = !CertNanny::Logging->error('MSG', "No openssl shell specified")}
+  if (!$rc && !defined $args{FILENAME})  {$rc = !CertNanny::Logging->error('MSG', "createpks12(): No output file name specified")}
+  if (!$rc && !defined $args{CERTFILE})  {$rc = !CertNanny::Logging->error('MSG', "createpks12(): No certificate file specified")}
+  if (!$rc && !defined $args{KEYFILE})   {$rc = !CertNanny::Logging->error('MSG', "createpks12(): No key file specified")}
+  if (!$rc && !defined $args{EXPORTPIN}) {$rc = !CertNanny::Logging->error('MSG', "createpks12(): No export PIN specified")}
 
   CertNanny::Logging->debug('MSG', "Certformat: $args{CERTFORMAT}");
 
   if (!$rc && (!defined $args{CERTFORMAT} or $args{CERTFORMAT} !~ /^(PEM|DER)$/)) {
-    $rc = CertNanny::Logging->error('MSG', "createpks12(): Illegal certificate format specified")
+    $rc = !CertNanny::Logging->error('MSG', "createpks12(): Illegal certificate format specified")
   }
 
   if (!$rc) {
@@ -1067,7 +1067,7 @@ sub createPKCS12 {
       # Todo pgk: Testen runCommand
       @cmd = (CertNanny::Util->osq("$openssl"), 'x509', '-in', CertNanny::Util->osq("$args{CERTFILE}"), '-inform', CertNanny::Util->osq("$args{CERTFORMAT}"), '-out', CertNanny::Util->osq("$certfile"), '-outform', 'PEM',);
       if (CertNanny::Util->runCommand(\@cmd)->{RC} != 0) {
-        $rc = CertNanny::Logging->error('MSG', "Certificate format conversion failed")
+        $rc = !CertNanny::Logging->error('MSG', "Certificate format conversion failed")
       }
     } ## end if ($args{CERTFORMAT} ...)
 
@@ -1324,7 +1324,7 @@ sub installRoots {
   if ($doSearch) {
     my $rootCertHash = $self->k_getAvailableRootCAs();
     if (!defined($rootCertHash)) {
-      $rc = CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
     } else {
       # write for TARGET DIRECTORY links: Links every certificate to the target directory
       if (defined($locInstall{'directory'}) && (!defined($args{TARGET}) or ('DIRECTORY' =~ m/^$args{TARGET}/))) {
@@ -1455,7 +1455,7 @@ sub installCertChain {
           if( !CertNanny::Util->writeFile(DSTFILE =>  $locInstall{'file'},
                                             SRCFILE => $cert->{CERTFILE}, 
                                             APPEND  => 1)) {                                                     
-            $rc = CertNanny::Logging->error('MSG', "installCertChain(): failed to wire cert chain file");                   
+            $rc = !CertNanny::Logging->error('MSG', "installCertChain(): failed to wire cert chain file");
           }       
         }    
        } 
