@@ -1120,7 +1120,7 @@ sub k_getNextTrustAnchor {
         if ($IRDN[0] =~ $entry->{rootcaupdate}->{signerIssuerSubjectRegex}) {
           CertNanny::Logging->debug('MSG', "signer certificate issuer subject check successful: " . $IRDN[0]);
         } else {
-          $rc = !CertNanny::Logging->error('MSG', "Signer certificate issuer subject check failed rootcerts WILL NOT BE ACCEPTED: " . $IRDN[0]);
+          $rc = !CertNanny::Logging->error('MSG', "Signer certificate issuer subject check failed rootcerts WILL NOT BE ACCEPTED: <" . $IRDN[0] . "> !~ <" . $entry->{rootcaupdate}->{signerIssuerSubjectRegex} . ">");
         }
       }
       
@@ -1148,12 +1148,11 @@ sub k_getNextTrustAnchor {
               my @filestat = (stat($newRootCertFile));
               my $now      = time();
               my $fileage  = $filestat[10];
-
+ 			  my $quarantineTimeInSec = $entry->{rootcaupdate}->{quarantinetime} * 86400;
+              
               #CertNanny::Logging->debug('MSG', "file age :" .  $filestat[10] . Dumper (stat($newRootCertFile) ) );
               CertNanny::Logging->debug('MSG', "now: " . $now);
-              CertNanny::Logging->debug('MSG', "sub $fileage age minus now $now: " . ($now - $fileage));
-
-              my $quarantineTimeInSec = $entry->{rootcaupdate}->{quarantinetime} * 86400;
+              CertNanny::Logging->debug('MSG', "sub $fileage age minus now $now: " . ($now - $fileage) . " (quarantine time in seconds: <$quarantineTimeInSec>)");
 
               ##if file older then the specified quarantine days in sec
               if (($now - $fileage) > $quarantineTimeInSec) {

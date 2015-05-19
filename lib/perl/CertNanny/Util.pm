@@ -483,22 +483,22 @@ sub writeFile {
   my $self = (shift)->getInstance();
   my %args = (@_);
 
-  my $rc = 1;
-  
-  if ((!defined $args{SRCFILE} && !defined $args{SRCCONTENT}) || (defined $args{SRCFILE} && defined $args{SRCCONTENT})) {
-    $rc = CertNanny::Logging->error('MSG', "writeFile(): Either SRCFILE or SRCCONTENT must be defined.");
-  }
-  
-  if ($rc && !defined $args{DSTFILE}) {
-    $rc = CertNanny::Logging->error('MSG', "writeFile(): Destination File DSTFILE must be defined.");
-  }
-
   my $srcfile    = $args{SRCFILE};
   my $srccontent = $args{SRCCONTENT};
   my $dstfile    = $args{DSTFILE};
 
+  my $rc = 1;
+  
+  if (!defined $dstfile) {
+    $rc = CertNanny::Logging->error('MSG', "writeFile(): Destination File DSTFILE must be defined.");
+  }
+
+  if ($rc && ((!defined $srcfile && !defined $srccontent) || (defined $srcfile && defined $srccontent))) {
+    $rc = CertNanny::Logging->error('MSG', "writeFile(): Either SRCFILE or SRCCONTENT must be defined to write in <$dstfile>.");
+  }
+
   if ($rc && (-e $dstfile) && (!$args{FORCE}) && (!$args{APPEND})) {
-    $rc = CertNanny::Logging->error('MSG', "writeFile(): output file already exists");
+    $rc = CertNanny::Logging->error('MSG', "writeFile(): output file <$dstfile> already exists");
   }
 
   if ($rc && defined($srccontent)) {
@@ -513,7 +513,7 @@ sub writeFile {
 
     my $fh;
     if (not sysopen($fh, $dstfile, $mode)) {
-      $rc = CertNanny::Logging->error('MSG', "writeFile(): output file open failed");
+      $rc = CertNanny::Logging->error('MSG', "writeFile(): output file <$dstfile> open failed");
     } else {
       binmode $fh;
       print {$fh} $srccontent;
@@ -524,16 +524,16 @@ sub writeFile {
   if ($rc && defined($srcfile)) {
     if ($args{APPEND}) {
       if (!open OUT, '>>'.$dstfile) {
-        $rc = CertNanny::Logging->error('MSG', "writeFile(): output file open failed");
+        $rc = CertNanny::Logging->error('MSG', "writeFile(): output file <$dstfile> open failed");
       }
     } else {
       if (!open OUT, '>'.$dstfile) {
-        $rc = CertNanny::Logging->error('MSG', "writeFile(): output file open failed");
+        $rc = CertNanny::Logging->error('MSG', "writeFile(): output file <$dstfile> open failed");
       }
     }
     if ($rc) {
       if (!open IN, $srcfile) {
-        $rc = CertNanny::Logging->error('MSG', "writeFile(): input file open failed");
+        $rc = CertNanny::Logging->error('MSG', "writeFile(): input file <$srcfile> open failed");
       }
       if ($rc) {
         binmode IN;
