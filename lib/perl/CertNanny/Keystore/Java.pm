@@ -353,7 +353,7 @@ sub getKey {
   my $entryname = $options->{ENTRYNAME};
   my $config    = $options->{CONFIG};
 
-  my $rc = 0;
+  my $rc = undef;
 
   my $openssl = $config->get('cmd.openssl', 'CMD');
   $alias ||= $entry->{alias};
@@ -376,8 +376,9 @@ sub getKey {
       }
     }
 
+    my $tmpFile;
     if (!$rc) {
-      my $tmpFile = CertNanny::Util->getTmpFile();
+      $tmpFile = CertNanny::Util->getTmpFile();
       CertNanny::Logging->info('MSG', "Extracting key <$alias> from <$tmpKeystore/$keystore> to tmp. file <$tmpFile> in format <PKCS12>.");
       @cmd = (CertNanny::Util->osq("$options->{keytool}"), -importkeystore);
       push(@cmd, -noprompt);
@@ -398,28 +399,26 @@ sub getKey {
     }
     
     if (!$rc) {
-      if (!defined $openssl) {
-        $rc = !CertNanny::Logging->error('MSG', "No openssl shell specified");
-      }
-    }
-  
-    if (!$rc) {
       # extract private key unencrypted
-      @cmd = (CertNanny::Util->osq("$openssl"), 'pkcs12');
-      push(@cmd, -in => CertNanny::Util->osq("$tmpFile"));
-      push(@cmd, -passin => 'env:PIN');
-      push(@cmd, -nocerts);
-      push(@cmd, -nodes);
-      $ENV{PIN} = $entry->{store}->{pin};
-      $rc = join("", @{CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{STDOUT}});
-      delete $ENV{PIN};
-      if (!$rc) {
-        $rc = !CertNanny::Logging->error('MSG', "PKCS12 key extraction failed");
+      if (defined $openssl) {
+        @cmd = (CertNanny::Util->osq("$openssl"), 'pkcs12');
+        push(@cmd, -in => CertNanny::Util->osq("$tmpFile"));
+        push(@cmd, -passin => 'env:PIN');
+        push(@cmd, -nocerts);
+        push(@cmd, -nodes);
+        $ENV{PIN} = $entry->{store}->{pin};
+        $rc = join("", @{CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{STDOUT}});
+        delete $ENV{PIN};
+        if ($rc) {
+          $rc = !CertNanny::Logging->error('MSG', "PKCS12 key extraction failed");
+        } else {
+          $rc = {KEYDATA   => $rc,
+                 KEYTYPE   => 'OpenSSL',
+                 KEYFORMAT => 'PEM'};
+          $self->{myKey} = $rc;
+        }
       } else {
-        $rc = {KEYDATA   => $rc,
-               KEYTYPE   => 'OpenSSL',
-               KEYFORMAT => 'PEM'};
-        $self->{myKey} = $rc;
+        $rc = !CertNanny::Logging->error('MSG', "No openssl shell specified");
       }
     }
   }
@@ -876,6 +875,7 @@ sub installRoots {
   
   # set rc 0 if TARGET is not defined or TARGET is LOCATION otherwise 1
   my $rc = (defined($args{TARGET}) and ($args{TARGET} ne 'LOCATION'));
+  CertNanny::Logging->debug('MSG', "Target: ". $args{TARGET});
   
   # run only if no TARGET is defined or TARGET is LOCATION
   if (!$rc) {

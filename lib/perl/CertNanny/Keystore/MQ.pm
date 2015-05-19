@@ -987,115 +987,112 @@ sub installRoots {
   my $entryname = $options->{ENTRYNAME};
   my $config    = $options->{CONFIG};
   
-  my $gsk6cmd = $self->{OPTIONS}->{gsk6cmd};
-
-  if(!defined $self->{OPTIONS}->{gsk6cmd}){
-    $gsk6cmd = $self->{OPTIONS}->{gskcmd};   
-  }
-  
-  # build a new temp keystore; Start with a working copy of the existing one
-  my $origin = File::Spec->canonpath($entry->{location}) . '.kdb'; 
-  if (!-r "$origin") {
-    $origin = File::Spec->canonpath($entry->{location});
-  }
-  my $dest = $origin . ".work";
-  CertNanny::Logging->debug('MSG', "Creating Working copy of <$origin> as <$dest>");
-  
-  if(! copy($origin, $dest)){
-    CertNanny::Logging->error('MSG', "Could not create working copy of <$origin> as <$dest>");
-    CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Install all available root certificates");
-    return 1;
-  }
-  
-  # set rc 0 if TARGET is not defined or TARGET is LOCATION otherwise 1
   my $rc = (defined($args{TARGET}) and ($args{TARGET} ne 'LOCATION'));
   CertNanny::Logging->debug('MSG', "Target: ". $args{TARGET});
   
   # run only if no TARGET is defined or TARGET is LOCATION
   if (!$rc) {
-    my $installedRootCAs = $args{INSTALLED};
-    my $availableRootCAs = $args{AVAILABLE};
-  
-    my @cmd;
-    my $certData;
+    my $gsk6cmd = $self->{OPTIONS}->{gsk6cmd};
 
-    if (!defined($availableRootCAs)) {
-      my $rootCertList = $self->k_getAvailableRootCerts();
-      if (!defined($rootCertList)) {
-        $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
-      }
+    $gsk6cmd = $self->{OPTIONS}->{gskcmd} if (!defined $self->{OPTIONS}->{gsk6cmd});
   
-      if (!$rc) {
-        my $availableRootCAs = {};
-        # Foreach available root cert get the SHA1
-        foreach my $certRef (@{$rootCertList}) {
-          my $certSHA1 = CertNanny::Util->getCertSHA1(%{$certRef})->{CERTSHA1};
-          if (exists($availableRootCAs->{$certSHA1})) {
-            if (exists($availableRootCAs->{$certSHA1}->{CERTFILE}) and ($certRef->{CERTFILE})) {
-              CertNanny::Logging->debug('MSG', "Identical root certificate in <" . $availableRootCAs->{$certSHA1}->{CERTFILE} . "> and <" . $certRef->{CERTFILE} . ">");
-            } else {
-              CertNanny::Logging->debug('MSG', "Identical root certificate <" . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} . "> found.");
-            }
-          } else {
-            $availableRootCAs->{$certSHA1} = $certRef;
-          }
-        }
-      }
+    # build a new temp keystore; Start with a working copy of the existing one
+    my $origin = File::Spec->canonpath($entry->{location}) . '.kdb';
+    if (!-r "$origin") {
+      $origin = File::Spec->canonpath($entry->{location});
+    }
+    my $dest = $origin . ".work";
+    CertNanny::Logging->debug('MSG', "Creating Working copy of <$origin> as <$dest>");
+
+    if (!copy($origin, $dest)) {
+      $rc = !CertNanny::Logging->error('MSG', "Could not create working copy of <$origin> as <$dest>");
     }
 
-    if (!defined($availableRootCAs)) {
-      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.dir", 'FILE'));
-    } else {
-      #  my $locName = $self->_generateKeystore();
-      $rc = 1 if (!$dest);
-      if (!$rc) {
-        # delete every root CA, that does not exist in $availableRootCAs from keystore
-        foreach my $certSHA1 (keys %{$installedRootCAs}) {
-          if (!exists($availableRootCAs->{$certSHA1}) && ($self->k_getCertType($installedRootCAs->{$certSHA1}) eq 'installedRootCAs')) {
-            CertNanny::Logging->debug('MSG', "Deleting root cert " . $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
-            my @certcmd;
-            @certcmd = (CertNanny::Util->osq("$gsk6cmd"), '-cert', '-delete', '-db', CertNanny::Util->osq("$dest"), '-pw', CertNanny::Util->osq("$self->{PIN}") , '-label' ,CertNanny::Util->osq("$installedRootCAs->{$certSHA1}->{'CERTALIAS'}") );           
-   
-            if (CertNanny::Util->runCommand(\@certcmd, HIDEPWD => 1)->{RC}) {
-              CertNanny::Logging->error('MSG', "Error deleting root cert " . $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
-            }
-          }
-        }
+    if (!$rc) {
+      my $installedRootCAs = $args{INSTALLED};
+      my $availableRootCAs = $args{AVAILABLE};
 
-        # copy every root CA, that does not exist in $installedRootCAs to keystore
-        foreach my $certSHA1 (keys  %{$availableRootCAs}) {
-          if (!exists($installedRootCAs->{$certSHA1})) {
-            CertNanny::Logging->debug('MSG', "Importing root cert " . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
-            my $tmpFile = CertNanny::Util->getTmpFile();
-            CertNanny::Util->writeFile(DSTFILE => $tmpFile,
-                                       SRCFILE => $availableRootCAs->{$certSHA1}->{'CERTFILE'});
-                                       
-            my $alias = 'newRoot';
-            if ($availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} =~ /CN=([^,]+).*/) {
-              ($alias = $1) =~ s/\s/_/g;
-            }
-            
-            my @certcmd;
-            @certcmd = (CertNanny::Util->osq("$gsk6cmd"), '-cert', '-add', '-db', CertNanny::Util->osq("$dest"), '-pw', CertNanny::Util->osq("$self->{PIN}") , '-label' ,CertNanny::Util->osq("$alias") , '-file', $tmpFile ,'-format', 'ascii'  );
-     
-            if (CertNanny::Util->runCommand(\@certcmd, HIDEPWD => 1)->{RC}) {
-              CertNanny::Logging->error('MSG', "Error importing root cert " . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+      my @cmd;
+      my $certData;
+
+      if (!defined($availableRootCAs)) {
+        my $rootCertList = $self->k_getAvailableRootCerts();
+        if (!defined($rootCertList)) {
+          $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+        }
+  
+        if (!$rc) {
+          my $availableRootCAs = {};
+          # Foreach available root cert get the SHA1
+          foreach my $certRef (@{$rootCertList}) {
+            my $certSHA1 = CertNanny::Util->getCertSHA1(%{$certRef})->{CERTSHA1};
+            if (exists($availableRootCAs->{$certSHA1})) {
+              if (exists($availableRootCAs->{$certSHA1}->{CERTFILE}) and ($certRef->{CERTFILE})) {
+                CertNanny::Logging->debug('MSG', "Identical root certificate in <" . $availableRootCAs->{$certSHA1}->{CERTFILE} . "> and <" . $certRef->{CERTFILE} . ">");
+              } else {
+                CertNanny::Logging->debug('MSG', "Identical root certificate <" . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} . "> found.");
+              }
             } else {
-              # collect Postinstallhook information
-              $self->{hook}->{Type}   .= 'FILE' . ','                                                               if (defined($self->{hook}->{Type})   && ($self->{hook}->{Type}   !~ m/FILE/s));
-              $self->{hook}->{File}   .= $availableRootCAs->{$certSHA1}->{CERTFILE} . ','                           if (defined($self->{hook}->{File})   && ($self->{hook}->{File}   !~ m/$availableRootCAs->{$certSHA1}->{CERTFILE}/s));
-              $self->{hook}->{FP}     .= $availableRootCAs->{$certSHA1}->{CERTINFO}->{CertificateFingerprint} . ',' if (defined($self->{hook}->{FP})     && ($self->{hook}->{FP}     !~ m/$availableRootCAs->{$certSHA1}->{CERTINFO}->{CertificateFingerprint}/s));
-              $self->{hook}->{Target} .= $entry->{location} . ','                                                   if (defined($self->{hook}->{Target}) && ($self->{hook}->{Target} !~ m/$entry->{location}/s));
+              $availableRootCAs->{$certSHA1} = $certRef;
             }
           }
         }
       }
-      
-      # copy the temp keystore to $location an delete temp keystore
-      if (!File::Copy::copy($dest, $origin)) {
-        $rc = !CertNanny::Logging->error('MSG', "Could not copy new store <$dest> to current store <$origin>");
+
+      if (!defined($availableRootCAs)) {
+        $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config-get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.dir", 'FILE'));
       } else {
-        eval {unlink($dest)};
+        #  my $locName = $self->_generateKeystore();
+        $rc = 1 if (!$dest);
+        if (!$rc) {
+          # delete every root CA, that does not exist in $availableRootCAs from keystore
+          foreach my $certSHA1 (keys %{$installedRootCAs}) {
+            if (!exists($availableRootCAs->{$certSHA1}) && ($self->k_getCertType($installedRootCAs->{$certSHA1}) eq 'installedRootCAs')) {
+              CertNanny::Logging->debug('MSG', "Deleting root cert " . $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+              my @certcmd;
+              @certcmd = (CertNanny::Util->osq("$gsk6cmd"), '-cert', '-delete', '-db', CertNanny::Util->osq("$dest"), '-pw', CertNanny::Util->osq("$self->{PIN}") , '-label' ,CertNanny::Util->osq("$installedRootCAs->{$certSHA1}->{'CERTALIAS'}") );
+   
+              if (CertNanny::Util->runCommand(\@certcmd, HIDEPWD => 1)->{RC}) {
+                CertNanny::Logging->error('MSG', "Error deleting root cert " . $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+              }
+            }
+          }
+
+          # copy every root CA, that does not exist in $installedRootCAs to keystore
+          foreach my $certSHA1 (keys  %{$availableRootCAs}) {
+            if (!exists($installedRootCAs->{$certSHA1})) {
+              CertNanny::Logging->debug('MSG', "Importing root cert " . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+              my $tmpFile = CertNanny::Util->getTmpFile();
+              CertNanny::Util->writeFile(DSTFILE => $tmpFile,
+                                         SRCFILE => $availableRootCAs->{$certSHA1}->{'CERTFILE'});
+
+              my $alias = 'newRoot';
+              if ($availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} =~ /CN=([^,]+).*/) {
+                ($alias = $1) =~ s/\s/_/g;
+              }
+
+              my @certcmd;
+              @certcmd = (CertNanny::Util->osq("$gsk6cmd"), '-cert', '-add', '-db', CertNanny::Util->osq("$dest"), '-pw', CertNanny::Util->osq("$self->{PIN}") , '-label' ,CertNanny::Util->osq("$alias") , '-file', $tmpFile ,'-format', 'ascii'  );
+
+              if (CertNanny::Util->runCommand(\@certcmd, HIDEPWD => 1)->{RC}) {
+                CertNanny::Logging->error('MSG', "Error importing root cert " . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+              } else {
+                # collect Postinstallhook information
+                $self->{hook}->{Type}   .= 'FILE' . ','                                                               if (defined($self->{hook}->{Type})   && ($self->{hook}->{Type}   !~ m/FILE/s));
+                $self->{hook}->{File}   .= $availableRootCAs->{$certSHA1}->{CERTFILE} . ','                           if (defined($self->{hook}->{File})   && ($self->{hook}->{File}   !~ m/$availableRootCAs->{$certSHA1}->{CERTFILE}/s));
+                $self->{hook}->{FP}     .= $availableRootCAs->{$certSHA1}->{CERTINFO}->{CertificateFingerprint} . ',' if (defined($self->{hook}->{FP})     && ($self->{hook}->{FP}     !~ m/$availableRootCAs->{$certSHA1}->{CERTINFO}->{CertificateFingerprint}/s));
+                $self->{hook}->{Target} .= $entry->{location} . ','                                                   if (defined($self->{hook}->{Target}) && ($self->{hook}->{Target} !~ m/$entry->{location}/s));
+              }
+            }
+          }
+        }
+      
+        # copy the temp keystore to $location an delete temp keystore
+        if (!File::Copy::copy($dest, $origin)) {
+          $rc = !CertNanny::Logging->error('MSG', "Could not copy new store <$dest> to current store <$origin>");
+        } else {
+          eval {unlink($dest)};
+        }
       }
     }
   }
