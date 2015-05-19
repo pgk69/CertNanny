@@ -154,11 +154,11 @@ sub _iterate_entries {
   my $action = shift;
 
   my $loglevel = $self->{CONFIG}->get('log.level') || 3;
+  my $myKeystore = $self->getOption('keystore') || '';
 
   foreach my $entryname (keys %{$self->{ITEMS}}) {    # Instantiate every keystore, that is configured
-    my $myKeystore = $self->getOption('keystore') || '';
-    CertNanny::Logging->debug('MSG', "Testing keystore: <$myKeystore> specified by commandline against keystore found on system: <$entryname>");
-    next if (($myKeystore ne '') || ($myKeystore ne $entryname));
+    CertNanny::Logging->debug('MSG', "Testing keystore: <$myKeystore> specified by commandline against keystore found on system: <$entryname>") if ($myKeystore ne '');
+    next if (($myKeystore ne '') && ($myKeystore ne $entryname));
     
     CertNanny::Util->setVariable('NAME',  'KEYSTORE', 
                                  'VALUE', $entryname);
