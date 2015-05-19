@@ -854,12 +854,12 @@ sub do_executeHook {
       CertNanny::Logging->Out('STR', "Executing hook <$hookdef> with command <$hookcmd>\n");
       $keystore->k_executeHook($hookcmd, %args);
     } else {
-      CertNanny::Logging->debug('MSG', "No command defined for hook <$hookdef>");
-      CertNanny::Logging->Out('STR', "No command defined for hook <$hookdef>\n");
+      CertNanny::Logging->debug('MSG', "No command defined for hook <$hookdef> (possible typo in config or command line?)");
+      CertNanny::Logging->Out('STR', "No command defined for hook <$hookdef> (possible typo in config or command line?)\n");
     }
   } else {
-  	CertNanny::Logging->debug('MSG', "No hook specified for execHook");
-    CertNanny::Logging->Out('STR', "No hook specified for execHook\n");
+  	CertNanny::Logging->debug('MSG', "No hook specified for executeHook operation");
+    CertNanny::Logging->Out('STR', "No hook specified for executeHook operation\n");
   }
   
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Info");
