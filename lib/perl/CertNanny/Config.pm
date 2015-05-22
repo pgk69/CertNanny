@@ -143,7 +143,7 @@ sub _getRef {
       }
       $target = 1               if (defined $target and (ref($target) ne "HASH"))
     } else {
-      $target = $target->{$tmp} if exists $target->{$tmp};
+      $target = $target->{$tmp} if (ref($target) eq "HASH") && exists $target->{$tmp};
       $target = undef           if (!defined $target or (ref($target) eq "HASH"));
     }
     return $target;
@@ -604,7 +604,7 @@ sub _parseFile {
           $var = $var->{$confPart};
         }
         if ($doDupCheck && defined($var->{$key})) {
-          CertNanny::Logging->error('STR', "Config file <$configFile> ERROR: Duplicate value definition in line $lnr ($line)\n");
+          CertNanny::Logging->error('STR', "Config file <$configFile> ERROR: Duplicate value definition or error in value name in line $lnr ($line)\n");
         }
       
         while ($val =~ m{__ENV__(.*?)__}xms) {
