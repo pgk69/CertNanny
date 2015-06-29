@@ -1455,7 +1455,7 @@ sub installCertChain {
           if( !CertNanny::Util->writeFile(DSTFILE =>  $locInstall{'file'},
                                             SRCFILE => $cert->{CERTFILE}, 
                                             APPEND  => 1)) {                                                     
-            $rc = !CertNanny::Logging->error('MSG', "installCertChain(): failed to wire cert chain file");
+            $rc = !CertNanny::Logging->error('MSG', "installCertChain(): failed to write cert chain file");
           }       
         }    
        } 
