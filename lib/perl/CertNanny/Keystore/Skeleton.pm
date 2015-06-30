@@ -647,7 +647,7 @@ sub _createPKCS12 {
       if (!defined $content) {
         CertNanny::Logging->error('MSG', "createPKCS12(): Could not read CA chain entry");
         $fh->close;
-        unlink $cachainfile if (defined $cachainfile);
+        CertNanny::Util->wipe(FILE => $cachainfile, SECURE => 1) if (defined $cachainfile);
         return undef;
       }
 
@@ -668,15 +668,15 @@ sub _createPKCS12 {
     CertNanny::Logging->error('MSG', "PKCS#12 export failed");
     delete $ENV{PIN};
     delete $ENV{EXPORTPIN};
-    unlink $certfile if ($args{CERTFORMAT} eq "DER");
-    unlink $cachainfile if (defined $cachainfile);
+    CertNanny::Util->wipe(FILE => $certfile, SECURE => 1) if ($args{CERTFORMAT} eq "DER");
+    CertNanny::Util->wipe(FILE => $cachainfile, SECURE => 1) if (defined $cachainfile);
     return undef;
   }
 
   delete $ENV{PIN};
   delete $ENV{EXPORTPIN};
-  unlink $certfile if ($args{CERTFORMAT} eq "DER");
-  unlink $cachainfile if (defined $cachainfile);
+  CertNanny::Util->wipe(FILE => $certfile, SECURE => 1) if ($args{CERTFORMAT} eq "DER");
+  CertNanny::Util->wipe(FILE => $cachainfile, SECURE => 1) if (defined $cachainfile);
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " create pkcs12 file");
   return {FILENAME => $args{FILENAME}};

@@ -288,7 +288,7 @@ sub installCert {
 
   # This is the location for the NEW XML
   my $new_xml_file = File::Spec->catfile($certnanny_to_sap_dir, $xml_filename);
-  if (!unlink $old_xml_file) {
+  if (!CertNanny::Util->wipe(FILE => $old, SECURE => 1)_xml_file) {
     CertNanny::Logging->error('MSG', "Could not delete old XML file. Will continue to prevent loss of renewed certificate.");
   }
 

@@ -395,7 +395,7 @@ sub getKey {
         chomp($rc);
         $rc = !CertNanny::Logging->error('MSG', "getKey(): keytool -importkeystore failed ($rc)");
       }
-      unlink($tmpKeystore);
+      CertNanny::Util->wipe(FILE => $tmpKeystore, SECURE => 1);
     }
     
     if (!$rc) {
@@ -932,7 +932,7 @@ sub installRoots {
         if (!File::Copy::copy($locName, $entry->{location})) {
           $rc = !CertNanny::Logging->error('MSG', "Could not copy new store <$locName> to current store <$entry->{location}>");
         } else {
-          eval {unlink($locName)};
+          eval {CertNanny::Util->wipe(FILE => $locName, SECURE => 1);};
         }
       }
     }

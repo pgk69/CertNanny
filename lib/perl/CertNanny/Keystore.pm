@@ -170,7 +170,7 @@ sub DESTROY {
 
   return undef unless (exists $self->{TMPFILE});
 
-  foreach my $file (@{$self->{TMPFILE}}) {unlink $file}
+  foreach my $file (@{$self->{TMPFILE}}) {CertNanny::Util->wipe(FILE => $file, SECURE => 1)}
 } ## end sub DESTROY
 
 
@@ -540,24 +540,24 @@ sub k_storeState {
         if (File::Copy::move($file, $bakFile)) {
           CertNanny::Logging->debug('MSG', "Moving tmp. statefile <$tmpFile> to <$file>.");
           if (File::Copy::move($tmpFile, $file)) {
-            CertNanny::Logging->debug('MSG', "Unlinking backupfile <$bakFile>.");
-            eval {unlink($bakFile);};
+            CertNanny::Logging->debug('MSG', "Wiping backupfile <$bakFile>.");
+            eval {CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);};
           } else {
             CertNanny::Logging->debug('MSG', "Error moving <$tmpFile> to <$file>. Rollback.");
             File::Copy::move($bakFile, $file);
-            eval {unlink($tmpFile);};
+            eval {CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);};
             return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
           }
         } else {
           CertNanny::Logging->debug('MSG', "Error creating backup <$bakFile> of state file <$file>");
-          eval {unlink($bakFile);};
+          eval {CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);};
           return "Error creating backup <$bakFile> of state file <$file>";
         }
       } else {
         CertNanny::Logging->debug('MSG', "Statefile <$file> does not exists. No backup needed.");
         if (!File::Copy::move($tmpFile, $file)) {
           CertNanny::Logging->debug('MSG', "Error moving keystore tmp. state file <$tmpFile> to <$file>");
-          eval {unlink($tmpFile);};
+          eval {CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);};
           return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
         }
       }
@@ -614,12 +614,12 @@ sub k_checkclearState {
   # clean state entry
   if ($forceClear || $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} == 0) {
     foreach my $entry (qw( CERTFILE KEYFILE REQUESTFILE TEMPKEYSTORE )) {
-      CertNanny::Logging->debug('MSG', 'Unlinking'.$self->{STATE}->{DATA}->{RENEWAL}->{$entry});
-      eval {unlink $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry};};
+      CertNanny::Logging->debug('MSG', 'Wiping'.$self->{STATE}->{DATA}->{RENEWAL}->{$entry});
+      eval {CertNanny::Util->wipe(FILE => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}, SECURE => 1);};
     }
 
     # delete state file
-    eval {unlink $self->{OPTIONS}->{ENTRY}->{statefile};};
+    eval {CertNanny::Util->wipe(FILE => $self->{OPTIONS}->{ENTRY}->{statefile}, SECURE => 1);};
 
     $self->{STATE}->{DATA} = undef;
   }
@@ -854,7 +854,7 @@ WRITEFILES:
   # error checking for temporary file creation
   if ($error) {
     # something went wrong, clean up and bail out
-    foreach my $entry (@args) {unlink $entry->{TMPFILENAME}}
+    foreach my $entry (@args) {CertNanny::Util->wipe(FILE => $entry->{TMPFILENAME}, SECURE => 1)}
     CertNanny::Logging->error('MSG', "k_saveInstallFile(): could not create new file(s)");
     return undef;
   }
@@ -869,11 +869,11 @@ WRITEFILES:
     my $backupfile = $file . ".backup";
 
     # remove already existing backup file
-    if (-e $backupfile) {unlink $backupfile}
+    if (-e $backupfile) {CertNanny::Util->wipe(FILE => $backupfile, SECURE => 1)}
 
     # check if it still persists
     if (-e $backupfile) {
-      CertNanny::Logging->error('MSG', "k_saveInstallFile(): could not unlink backup file $backupfile");
+      CertNanny::Logging->error('MSG', "k_saveInstallFile(): could not wipe out backup file $backupfile");
       # clean up and bail out
       # undo rename operations
       foreach my $undo (@original_files) {
@@ -882,7 +882,7 @@ WRITEFILES:
       # clean up temporary files
       foreach my $entry (@args) {
         CertNanny::Logging->error('MSG', "k_saveInstallFile(): remove tempfile Entry $entry->{TMPFILENAME} ");
-        unlink $entry->{TMPFILENAME};
+        CertNanny::Util->wipe(FILE => $entry->{TMPFILENAME}, SECURE => 1);
       }
       return;
     } ## end if (-e $backupfile)
@@ -900,8 +900,8 @@ WRITEFILES:
        
         # clean up temporary files
         foreach my $entry (@args) {
-          CertNanny::Logging->debug('MSG', "unlink tempfiles if defined ->TMPFILENAME: ". $entry->{TMPFILENAME});
-          unlink $entry->{TMPFILENAME};
+          CertNanny::Logging->debug('MSG', "wiping tempfiles if defined ->TMPFILENAME: ". $entry->{TMPFILENAME});
+          CertNanny::Util->wipe(FILE => $entry->{TMPFILENAME}, SECURE => 1);
         }
         return undef;
       } ## end if ((!rename $file, $backupfile...))
@@ -931,12 +931,12 @@ WRITEFILES:
       CertNanny::Logging->error('MSG', "k_saveInstallFile(): could not rename <$tmpfile> to target file <$file>");
       # undo rename operations
       foreach my $undo (@original_files) {
-        unlink $undo->{SRC};
+        CertNanny::Util->wipe(FILE => $undo->{SRC}, SECURE => 1);
         rename $undo->{DST}, $undo->{SRC};
       }
       # clean up temporary files
       foreach my $entry (@args) {
-        unlink $entry->{TMPFILENAME};
+        CertNanny::Util->wipe(FILE => $entry->{TMPFILENAME}, SECURE => 1);
       }
       return undef;
     } ## end if (!rename $tmpfile, ...)
@@ -1175,7 +1175,7 @@ sub k_getNextTrustAnchor {
                     last;
                   }
                   ##delete new root CA cert from quarantine
-                  unlink $newRootCertFile;
+                  CertNanny::Util->wipe(FILE => $newRootCertFile, SECURE => 1);
                 } else {
                   CertNanny::Logging->debug('MSG', "new root with fingerprint" . $newroot->{CERTINFO}->{CertificateFingerprint} . " already exists as trusted root cert");
                 }
@@ -2147,12 +2147,12 @@ sub _sendRequest {
                     CertNanny::Logging->debug('MSG', "delete selfsign cert: " . $outCert);
 
                     if (-e $outCert) {
-                      unlink $outCert;
+                      CertNanny::Util->wipe(FILE => $outCert, SECURE => 1);
                       CertNanny::Logging->debug('MSG', "deleted " . $outCert);
                     }
                   } ## end if ($entry->...)
 
-                  unlink $outp12;
+                  CertNanny::Util->wipe(FILE => $outp12, SECURE => 1);
                 } ## end else [ if ($@) ]
               }
             }

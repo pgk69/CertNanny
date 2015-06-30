@@ -242,6 +242,7 @@ sub do_dump {
   CertNanny::Logging->switchConsoleOut('STATUS', 1);
   # and by the way we do not want all the junk on the concole
   CertNanny::Logging->logLevel('TARGET', 'console', 'LEVEL', 0);
+  
   if ($self->{OPTION}->{object} =~ /^data/) {
     my @hashname;
     $self->_dumpValue(\%{$config->{CONFIG}}, \@hashname);

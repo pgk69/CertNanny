@@ -760,11 +760,11 @@ sub createRequest {
     if (CertNanny::Util->runCommand(\@cmd)->{RC} != 0) {
       CertNanny::Logging->error('MSG', "Request creation failed");
       delete $ENV{PIN};
-      unlink $tmpconfigfile;
+      CertNanny::Util->wipe(FILE => $tmpconfigfile, SECURE => 1);
       return undef;
     }
     delete $ENV{PIN};
-    unlink $tmpconfigfile;
+    CertNanny::Util->wipe(FILE => $tmpconfigfile, SECURE => 1);
   } ## end else [ if ($self->k_hasEngine()...)]
 
   return $result;
@@ -1128,8 +1128,8 @@ sub createPKCS12 {
       }
       delete $ENV{PIN};
       delete $ENV{EXPORTPIN};
-      unlink $certfile if ($args{CERTFORMAT} eq "DER");
-      unlink $cachainfile if (defined $cachainfile);
+      CertNanny::Util->wipe(FILE => $certfile, SECURE => 1) if ($args{CERTFORMAT} eq "DER");
+      CertNanny::Util->wipe(FILE => $cachainfile, SECURE => 1) if (defined $cachainfile);
     } else {$rc = undef}
   } else {$rc = undef}
 
@@ -1406,7 +1406,7 @@ sub installRoots {
               }
             }    
           }
-          eval {unlink($tmpFile)};
+          eval {CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);};
         }  
       }
     }
@@ -1442,7 +1442,7 @@ sub installCertChain {
     if (defined($locInstall{'file'}) or defined($locInstall{'chainfile'})) {
  
        #delete old chainfile 
-       unlink $locInstall{'file'}; 
+       CertNanny::Util->wipe(FILE => $locInstall{'file'}, SECURE => 1);
        CertNanny::Logging->debug('MSG', "install chain file locInstall{'file'}");
          
        if (my $chainArrRef = $self->k_buildCertificateChain($self->getCert())) {
@@ -1505,7 +1505,7 @@ sub _createLocalCerts {
     foreach $certFile (@certFileList) {
       $certSHA1 = CertNanny::Util->getCertSHA1(CERTFILE => $certFile);
       if (defined($certSHA1) and defined($certSHA1->{CERTSHA1})) {
-        unlink $certFile if defined($certSHA1);
+        CertNanny::Util->wipe(FILE => $certFile, SECURE => 1) if defined($certSHA1);
       }
     }
   }
@@ -1555,7 +1555,7 @@ sub _createLocalCerts {
             $certTargetDir = File::Spec->canonpath($certTargetDir);
             eval {File::Path::mkpath($certTargetDir)};
             $target = File::Spec->catfile($certTargetDir, $subject_hash) . '.' . $counter;
-            unlink $target if (-e $target);
+            CertNanny::Util->wipe(FILE => $target, SECURE => 1) if (-e $target);
             $tryCopy = $copy;
             if (!$tryCopy) {
               if (link $certFile, $subject_hash) {

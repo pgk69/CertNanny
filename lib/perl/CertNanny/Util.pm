@@ -36,7 +36,7 @@ use Exporter;
 @EXPORT = qw(runCommand timeStamp isoDateToEpoch epochToIsoDate expandString 
              expandDate printableIsoDate readFile writeFile getCertSHA1
              getCertFormat getCertInfoHash getCSRInfoHash parseCertData 
-             getTmpFile forgetTmpFile staticEngine encodeBMPString writeOpenSSLConfig 
+             getTmpFile forgetTmpFile wipe staticEngine encodeBMPString writeOpenSSLConfig 
              getDefaultOpenSSLConfig backoffTime getMacAddresses 
              fetchFileList callOpenSSL os_type is_os_type setVariable
              unsetVariable osq dumpCertInfoHash Exit);    # Symbols to autoexport (:DEFAULT tag)
@@ -78,7 +78,7 @@ sub DESTROY {
 
   return unless (exists $self->{TMPFILE});
 
-  foreach my $file (@{$self->{TMPFILE}}) {unlink $file}
+  foreach my $file (@{$self->{TMPFILE}}) {CertNanny::Util->wipe(FILE => $file, SECURE => 1)}
 } ## end sub DESTROY
 
 
@@ -1170,7 +1170,7 @@ sub forgetTmpFile {
   my $rc = 1;           
   if (defined($args{FILE})) {            
     @{$self->{TMPFILE}} = grep {$_ ne $args{FILE}} @{$self->{TMPFILE}};
-    if ($args{DELETE}) {eval {$rc = unlink $args{FILE}}}
+    if ($args{DELETE}) {eval {$rc = CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1)}}
   }         
   
   # CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get a tmp file");
@@ -1495,6 +1495,34 @@ sub is_os_type {
   $os = $^O unless defined $os;
   return os_type($os) eq $type;
 }
+
+sub wipe {
+  my $self   = (shift)->getInstance();
+  
+  my %args = (FILE   => '',
+              SECURE => '0',
+              '00'   => '00',
+              FF     => 'FF',
+              @_);                   # argument pair list
+  
+  if (-e $args{FILE}) {
+    if ($args{SECURE}) {
+      my $bytes = -s $args{FILE};
+      if ($bytes > 0) {
+        open(FILE, '+<', $args{FILE});
+        seek(FILE, 0, 0);
+        print FILE pack('h*', $args{FF} x $bytes);
+        close(FILE);
+        open(FILE, '+<', $args{FILE});
+        seek(FILE, 0, 0);
+        print FILE pack('h*', $args{'00'} x $bytes);
+        close(FILE);
+      }
+    }
+    unlink $args{FILE};
+  }
+}
+
 
 1;
 

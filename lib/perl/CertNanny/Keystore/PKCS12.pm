@@ -661,12 +661,12 @@ sub installRoots {
               }
             }
             # cleanup 
-            eval {unlink($tmpKey)};
-            eval {unlink($tmpCert)};
-            eval {unlink($tmpP12)};
+            eval {CertNanny::Util->wipe(FILE => $tmpKey, SECURE => 1);};
+            eval {CertNanny::Util->wipe(FILE => $$tmpCert, SECURE => 1);};
+            eval {CertNanny::Util->wipe(FILE => $$tmpP12, SECURE => 1);};
           }
           # cleanup 
-          eval {unlink($CAListFile)};
+          eval {CertNanny::Util->wipe(FILE => $$CAListFile, SECURE => 1);};
         }
       }
     }
@@ -868,7 +868,7 @@ sub _getNewPKCS12Data {
   CertNanny::Logging->info('MSG', "Created prototype PKCS#12 file $pkcs12file");
 
   my $data = CertNanny::Util->readFile($pkcs12file);
-  unlink $pkcs12file;
+  CertNanny::Util->wipe(FILE => $pkcs12file, SECURE => 1);
   if (!defined $data) {
     CertNanny::Logging->error('MSG', "Could read new keystore file " . $pkcs12file);
     return undef;

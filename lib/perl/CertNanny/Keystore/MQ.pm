@@ -174,7 +174,7 @@ sub getCert {
  
   #if (system(join(' ', @cmd)) != 0) {
   if (CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{RC} != 0) {  
-    unlink $certfile;
+    CertNanny::Util->wipe(FILE => $certfile, SECURE => 1);
     CertNanny::Logging->error('MSG', "getCert(): could not extract certificate");
     CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get main certificate from keystore");
     return undef;
@@ -182,7 +182,7 @@ sub getCert {
 
   # read certificate from file and remove temp file
   my $content = CertNanny::Util->readFile($certfile);
-  unlink $certfile;
+  CertNanny::Util->wipe(FILE => $certfile, SECURE => 1);
   if (!defined $content) {
     CertNanny::Logging->error('MSG', "getCert(): Could not open input file $certfile");
     CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get main certificate from keystore");
@@ -235,7 +235,7 @@ sub installCert {
   my $newkeystoredb = $newkeystorebase . ".kdb";
 
   foreach my $ext (qw(.crl .rdb .kdb .sth)) {
-    unlink $newkeystorebase.$ext ;
+    CertNanny::Util->wipe(FILE => $newkeystorebase.$ext, SECURE => 1) ;
   }
 
   if ($options->{keygenmode} eq "external") {
@@ -361,11 +361,11 @@ sub installCert {
       @cmd = (CertNanny::Util->osq("$gsk6cmd"), '-cert', '-add', '-db', CertNanny::Util->osq("$newkeystoredb"), '-pw', CertNanny::Util->osq("$self->{PIN}"), '-file', CertNanny::Util->osq("$cacertfile"), '-format', 'ascii', '-label', CertNanny::Util->osq("$CN"),);       
    
       if (CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{RC}) {
-        unlink $cacertfile;
+        CertNanny::Util->wipe(FILE => $cacertfile, SECURE => 1);
         CertNanny::Logging->error('MSG', "Could not add certificate to keystore");
         return undef;
       }
-      unlink $cacertfile;
+      CertNanny::Util->wipe(FILE => $cacertfile, SECURE => 1);
 
     } ## end foreach my $item (@trustedcerts)
 
@@ -516,11 +516,11 @@ sub getKey {
 
     if (CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{RC}) {
       CertNanny::Logging->error('MSG', "getKey(): could not extract private key");
-      unlink $p8file;
+      CertNanny::Util->wipe(FILE => $p8file, SECURE => 1);
       return undef;
     }
     $keydata = CertNanny::Util->readFile($p8file);
-    unlink $p8file;
+    CertNanny::Util->wipe(FILE => $p8file, SECURE => 1);
   } else {
     ##default to new get key for gsk7cmd and up 
   
@@ -547,7 +547,7 @@ sub getKey {
 
     if (CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{RC}) {
       CertNanny::Logging->error('MSG', "getKey(): could not extract private key");
-      unlink $exportp12;
+      CertNanny::Util->wipe(FILE => $exportp12, SECURE => 1);
       return undef;
     }
   
@@ -566,14 +566,14 @@ sub getKey {
 
     if (CertNanny::Util->runCommand(\@opensslcmd, HIDEPWD => 1)->{RC}) {
       CertNanny::Logging->error('MSG', "getKey(): could not extract private key");
-      unlink $exportkey;
+      CertNanny::Util->wipe(FILE => $exportkey, SECURE => 1);
       return undef;
     }
   
     delete $ENV{PASSIN};
     $keydata = CertNanny::Util->readFile($exportkey);
-    unlink $exportkey;
-    unlink $exportp12;
+    CertNanny::Util->wipe(FILE => $exportkey, SECURE => 1);
+    CertNanny::Util->wipe(FILE => $exportp12, SECURE => 1);
   
     if ((!defined $keydata) or ($keydata eq "")) {
       CertNanny::Logging->error('MSG', "getKey(): Could not convert private key via pkcs12 export");
@@ -904,7 +904,7 @@ sub getInstalledCAs {
               CertNanny::Logging->debug('MSG', "skiping certLabel <$certlabel>"); 
             }
           }            
-          unlink $certexport;        
+          CertNanny::Util->wipe(FILE => $certexport, SECURE => 1);        
         }
       }
     }
@@ -1091,7 +1091,7 @@ sub installRoots {
         if (!File::Copy::copy($dest, $origin)) {
           $rc = !CertNanny::Logging->error('MSG', "Could not copy new store <$dest> to current store <$origin>");
         } else {
-          eval {unlink($dest)};
+          eval {CertNanny::Util->wipe(FILE => $dest, SECURE => 1);};
         }
       }
     }

@@ -237,8 +237,8 @@ sub getCA {
     my $ii = 0;
     while (-e $config->{sscep}->{CACertFile} . "-" . $ii) {
       my $file = $config->{sscep}->{CACertFile} . "-" . $ii;
-      CertNanny::Logging->debug('MSG', "Unlinking $file");
-      unlink $file;
+      CertNanny::Logging->debug('MSG', "Wiping $file");
+      CertNanny::Util->wipe(FILE => $file, SECURE => 1);
       if (-e $file) {
         CertNanny::Logging->error('MSG', "Could not delete CA certificate file $file, cannot proceed");
         return undef;
@@ -355,8 +355,8 @@ sub getNextCA {
   $ii = 0;
   while (-e $targetCAfile . "-" . $ii) {
     my $file = $targetCAfile . "-" . $ii;
-    CertNanny::Logging->debug('MSG', "Unlinking $file");
-    unlink $file;
+    CertNanny::Logging->debug('MSG', "Wiping $file");
+    CertNanny::Util->wipe(FILE => $file, SECURE => 1);
     if (-e $file) {
       CertNanny::Logging->error('MSG', "could not delete next CA certificate file $file, cannot proceed");
       return undef;
@@ -368,7 +368,7 @@ sub getNextCA {
   my $SignerCertinfo = CertNanny::Util->getCertInfoHash(CERTFILE   => $signercertfile,
                                                         CERTFORMAT => 'PEM');
 
-  unlink $signercertfile;
+  CertNanny::Util->wipe(FILE => $signercertfile, SECURE => 1);
   if (-e $signercertfile) {
     CertNanny::Logging->error('MSG', "could not delete next CA signer certificate file $signercertfile, cannot proceed");
     return undef;
