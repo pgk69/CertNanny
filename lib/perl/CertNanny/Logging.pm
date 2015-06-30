@@ -248,7 +248,7 @@ sub switchLogging {
     $logTarget{$args{TARGET}} = 1;
   } else {
     if (defined($args{FILE})) {
-      eval {CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1){FILE}} if $args{CLEAR};
+      eval {CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1)} if $args{CLEAR};
       $target .= ": $args{FILE}";
     }
     if (defined($args{FILELAST})) {
