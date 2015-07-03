@@ -413,8 +413,9 @@ sub do_renew {
   my $config    = $options->{CONFIG};
 
   if (defined($self->do_check(%args))) {
-    $self->do_updateRootCA();
+    $self->do_updateRootCA(%args);
     if($self->{ITEMS}->{$entryname}->{'location'} ne 'rootonly') {
+      my $mode = ($self->getOption('force')) ? 'FORCED' : 'SCHEDULED';
       if ($self->getOption('force') || $instance->k_validEqualLessThan($self->{ITEMS}->{$entryname}->{autorenew_days})) {
         my $mode = ($self->getOption('force')) ? 'FORCED' : 'SCHEDULED';
         CertNanny::Logging->debug('MSG', "---------------------------------------------------------------------------------");
@@ -422,6 +423,8 @@ sub do_renew {
         CertNanny::Logging->debug('MSG', "---------------------------------------------------------------------------------");
         CertNanny::Util->backoffTime($self->{CONFIG});
         $instance->k_renew();
+      } else {
+        CertNanny::Logging->debug('MSG',"no renewal " . lc($mode) . " ($entryname).");
       }
     }
   }
@@ -770,16 +773,16 @@ sub do_updateRootCA {
       $self->{ITEMS}->{$entryname}->{rootcaupdate}->{enable} eq "true") {
     CertNanny::Logging->debug('MSG', "RootCA update activated. Synchonizing Root CAs.");
     $instance->k_getNextTrustAnchor();
-    if ($instance->k_syncRootCAs() != 0) {
-      CertNanny::Logging->debug('MSG', "Synchronizing Root CAs failed.");
-    } else {
+    if ($instance->k_syncRootCAs()) {
       CertNanny::Logging->debug('MSG', "Root CAs successfuly synchronized.");
+    } else {
+      CertNanny::Logging->debug('MSG', "Synchronizing Root CAs failed.");
     }
   } else {
     CertNanny::Logging->debug('MSG', "RootCA update deactivated");
   }
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Update Root CA");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3]);
   return 1;
 } ## end sub do_updateRootCA
 
