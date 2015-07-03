@@ -476,7 +476,7 @@ sub deleteKey() {
   my $hsm_options = $self->{hsm_options};
   my $p11tool     = $hsm_options->{p11tool};
   my @deleteopts;
-  CertNanny::Util->timeStamp();
+  CertNanny::Util->isoDateToEpoch();
 
   CertNanny::Logging->debug('MSG', "deleteKey(): Deleting key with ID $keyid");
   push(@deleteopts, 'Slot=' . $hsm_options->{key}->{slot});

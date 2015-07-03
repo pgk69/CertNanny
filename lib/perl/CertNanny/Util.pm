@@ -33,8 +33,8 @@ use Data::Dumper;
 use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION);
 use Exporter;
 
-@EXPORT = qw(runCommand timeStamp isoDateToEpoch epochToIsoDate expandString 
-             expandDate printableIsoDate readFile writeFile getCertSHA1
+@EXPORT = qw(runCommand isoDateToEpoch epochToIsoDate expandStr 
+             printableIsoDate readFile writeFile getCertSHA1
              getCertFormat getCertInfoHash getCSRInfoHash parseCertData 
              getTmpFile forgetTmpFile wipe staticEngine encodeBMPString writeOpenSSLConfig 
              getDefaultOpenSSLConfig backoffTime getMacAddresses 
@@ -88,6 +88,7 @@ sub setVariable {
                 VALUE => '',
                 @_);
   $variable{$args{'NAME'}} = $args{'VALUE'} if ($args{'NAME'} ne '');
+  return 1;
 }
 
 
@@ -96,6 +97,7 @@ sub unsetVariable {
   my %args   = (NAME  => '',
                 @_);
   eval(undef($variable{$args{'NAME'}})) if ($args{'NAME'} ne '');
+  return 1;
 }
 
 
@@ -107,9 +109,9 @@ sub hidePin {
     $cmd[$ii + 1] = "*HIDDEN*" if ($cmd[$ii] =~ /(-pw|-target_pw|-storepass|-keypass|-srcstorepass|-deststorepass|-srckeypass|-destkeypass)/);
     $cmd[$ii] =~ s/Login=\S+/Login=*HIDDEN*/;
   }
-  my $commando = join(' ', @cmd);
+  my $command = join(' ', @cmd);
   
-  return $commando;
+  return $command;
 }
 
 
@@ -188,16 +190,6 @@ sub runCommand {
 } ## end sub runCommand
 
 
-sub timeStamp {
-  # returns current time as ISO timestamp (UTC)
-  # format: yyyymmddhhmmss
-  my $self = (shift)->getInstance();
-
-  my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday) = gmtime(time);
-  return sprintf("%04d%02d%02d%02d%02d%02d", $year + 1900, $mon + 1, $mday, $hour, $min, $sec);
-}
-
-
 sub isoDateToEpoch {
   # convert ISO date to Unix timestamp (seconds since the Epoch)
   # arg: ISO date (YYYYMMDDHHMMSS)
@@ -206,24 +198,15 @@ sub isoDateToEpoch {
   my $isodate     = shift;
   my $isLocalTime = shift;
 
-  return undef unless defined $isodate;
-  if (!defined $isLocalTime) {
-    if (my ($year, $mon, $mday, $hours, $min, $sec) = ($isodate =~ /^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)$/)) {
-      $mon  -= 1;
-      $year -= 1900;
+  return unless defined $isodate;
 
-      return timegm($sec, $min, $hours, $mday, $mon, $year);
-    }
-  } else {
-    if (my ($year, $mon, $mday, $hours, $min, $sec) = ($isodate =~ /^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)$/)) {
-      $mon  -= 1;
-      $year -= 1900;
-
-      return timelocal($sec, $min, $hours, $mday, $mon, $year);
-    }
+  if (my ($year, $mon, $mday, $hours, $min, $sec) = ($isodate =~ /^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)$/)) {
+    $mon  -= 1;
+    $year -= 1900;
+    return (defined($isLocalTime)) ? timelocal($sec, $min, $hours, $mday, $mon, $year) : timegm($sec, $min, $hours, $mday, $mon, $year);
   }
 
-  return undef;
+  return;
 } ## end sub isoDateToEpoch
 
 
@@ -232,48 +215,18 @@ sub epochToIsoDate {
   # arg: Epoch seconds , use localtime flag
   # return: ISO Date (YYYYMMDDHHMMSS)
   my $self = (shift)->getInstance();
-  my $epoch       = shift;
+  my $epoch       = shift || time;
   my $isLocalTime = shift;
 
-  if (!defined $isLocalTime) {
-    my ($seconds, $minutes, $hours, $day_of_month, $month, $year, $wday, $yday, $isdst) = gmtime($epoch);
-    return sprintf("%04d%02d%02d%02d%02d%02d", $year + 1900, $month + 1, $day_of_month, $hours, $minutes, $seconds);
-
-  } else {
-    my ($seconds, $minutes, $hours, $day_of_month, $month, $year, $wday, $yday, $isdst) = localtime($epoch);
+  my ($seconds, $minutes, $hours, $day_of_month, $month, $year, $wday, $yday, $isdst);
+  if (defined($isLocalTime)) {
+    ($seconds, $minutes, $hours, $day_of_month, $month, $year, $wday, $yday, $isdst) = localtime($epoch);
     CertNanny::Logging->debug('MSG', "Localtime daylightsaving $isdst");
-
-    return sprintf("%04d%02d%02d%02d%02d%02d", $year + 1900, $month + 1, $day_of_month, $hours, $minutes, $seconds);
-
+  } else {
+    ($seconds, $minutes, $hours, $day_of_month, $month, $year, $wday, $yday, $isdst) = gmtime($epoch);
   }
-
+  return sprintf("%04d%02d%02d%02d%02d%02d", $year + 1900, $month + 1, $day_of_month, $hours, $minutes, $seconds);
 } ## end sub epochToIsoDate
-
-
-sub expandDate {
-  # expand time format controls (subset as specified by date(1))
-  # %y last two digits of year (00..99)
-  # %Y year (1970...)
-  # %m month (01..12)
-  # %d day of month (01..31)
-  # %H hour (00..23)
-  # %M minute (00..59)
-  # %S second (00..59)
-  my $self = (shift)->getInstance();
-  my $arg  = shift;
-
-  my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime(time);
-
-  $arg =~ s/%y/sprintf("%02d", ($year + 1900) % 100)/ge;
-  $arg =~ s/%Y/$year + 1900/ge;
-  $arg =~ s/%m/sprintf("%02d", $mon + 1)/ge;
-  $arg =~ s/%d/sprintf("%02d", $mday)/ge;
-  $arg =~ s/%H/sprintf("%02d", $hour)/ge;
-  $arg =~ s/%M/sprintf("%02d", $min)/ge;
-  $arg =~ s/%S/sprintf("%02d", $sec)/ge;
-
-  $arg;
-} ## end sub expandDate
 
 
 sub expandStr {
@@ -403,7 +356,7 @@ sub expandStr {
   $input =~ s:%S:$s:g;
 
   return $input;
-} ## end sub expandDate
+} ## end sub expandStr
 
 
 sub printableIsoDate {
@@ -603,10 +556,9 @@ sub callOpenSSL {
   my $params  = shift;
   my %args    = (@_);
 
-  my $rc = 0;
-  my $info;
+  my $rc;
   
-  return undef if (!$self->_sanityCheckIn('callOpenSSL', %args));
+  return if (!$self->_sanityCheckIn('callOpenSSL', %args));
   
   # build commandstring
   my $openssl = $self->{CONFIG}->get('cmd.openssl', 'CMD');
@@ -643,7 +595,7 @@ sub callOpenSSL {
         }
       } else {
         if (defined($result->{STDOUT})) {
-          $info = CertNanny::Util->parseCertData('DATA', $result->{STDOUT})
+          $rc = CertNanny::Util->parseCertData('DATA', $result->{STDOUT})
         } else {
           CertNanny::Logging->error('MSG', "callOpenSSL(): Error analysing ASN.1 decoded certificate");
         }
@@ -653,7 +605,7 @@ sub callOpenSSL {
     }
   }
   
-  return $info;
+  return $rc;
 } ## end sub callOpenSSL
 
 
@@ -667,7 +619,7 @@ sub _sanityCheckIn {
   my $proc = shift;
   my %args = (@_);    # argument pair list
 
-  my $rc = 0;
+  my $rc;
   # eather CERTFILE or CERTDATA must be provided
   if (!(defined $args{CERTFILE} or defined $args{CERTDATA})) {
     CertNanny::Logging->error('MSG', $proc . "(): No input data specified");
@@ -731,7 +683,7 @@ sub getCertSHA1 {
               OUTFORMAT  => 'DER',
               @_);                   # argument pair list
               
-  my $rc = undef;
+  my $rc;
              
   my ($certType, $cert, $base64, $sha);
   
@@ -796,13 +748,13 @@ sub getCertInfoHash {
   my %args = (CERTFORMAT => 'DER',
               @_);    # argument pair list
               
-  my $info;
+  my $rc;
   
   if (defined($args{CERTINFO})) {
-    $info = $args{CERTINFO}
+    $rc = $args{CERTINFO}
   } else {   
     # sanity checks
-    return undef if (!$self->_sanityCheckIn('getCertInfoHash', %args));
+    return if (!$self->_sanityCheckIn('getCertInfoHash', %args));
 
     my %month = (Jan => 1,  Feb => 2,  Mar => 3,  Apr => 4,
                  May => 5,  Jun => 6,  Jul => 7,  Aug => 8,
@@ -814,31 +766,31 @@ sub getCertInfoHash {
                    'modulus', 'fingerprint', 'sha1', 'pubkey', 
                    'purpose');
 
-    $info  = CertNanny::Util->callOpenSSL($command, \@params, %args);
+    $rc = CertNanny::Util->callOpenSSL($command, \@params, %args);
   
     ####
     # rewrite dates from human readable to ISO notation
     foreach my $var (qw(NotBefore NotAfter)) {
-      my ($mon, $day, $hh, $mm, $ss, $year, $tz) = $info->{$var} =~ /(\S+)\s+(\d+)\s+(\d+):(\d+):(\d+)\s+(\d+)\s*(\S*)/;
+      my ($mon, $day, $hh, $mm, $ss, $year, $tz) = $rc->{$var} =~ /(\S+)\s+(\d+)\s+(\d+):(\d+):(\d+)\s+(\d+)\s*(\S*)/;
       my $dmon = $month{$mon};
       if (!defined $dmon) {
-        CertNanny::Logging->error('MSG', "getCertInfoHash(): could not parse month <$mon> in date <$info->{$var}> returned by OpenSSL");
-        return undef;
+        CertNanny::Logging->error('MSG', "getCertInfoHash(): could not parse month <$mon> in date <$rc->{$var}> returned by OpenSSL");
+        return;
       }
 
-      $info->{$var} = sprintf("%04d%02d%02d%02d%02d%02d", $year, $dmon, $day, $hh, $mm, $ss);
+      $rc->{$var} = sprintf("%04d%02d%02d%02d%02d%02d", $year, $dmon, $day, $hh, $mm, $ss);
     } ## end foreach my $var (qw(NotBefore NotAfter))
 
     # sanity checks
     foreach my $var (qw(Version SerialNumber SubjectName IssuerName NotBefore NotAfter CertificateFingerprint Modulus)) {
-      if (!exists $info->{$var}) {
+      if (!exists $rc->{$var}) {
         CertNanny::Logging->error('MSG', "getCertInfoHash(): Could not determine field <$var> from X.509 certificate");
-        return undef;
+        return;
       }
     }
   }
 
-  return $info;
+  return $rc;
 } ## end sub getCertInfoHash
 
 
@@ -912,24 +864,26 @@ sub getCSRInfoHash {
 
   my %args = (CERTFORMAT => 'PEM',
               @_);    # argument pair list
+              
+  my $rc;
 
   # sanity checks
-  return undef if (!$self->_sanityCheckIn('getCSRInfoHash', %args));
+  return if (!$self->_sanityCheckIn('getCSRInfoHash', %args));
 
   my $command   = 'req';
   my @arguments = ('text', 'subject', 'modulus');
 
-  my $info  = CertNanny::Util->callOpenSSL($command, \@arguments, %args);
+  $rc  = CertNanny::Util->callOpenSSL($command, \@arguments, %args);
   
   # sanity checks
   foreach my $var (qw(Version SubjectName Modulus)) {
-    if (!exists $info->{$var}) {
+    if (!exists $rc->{$var}) {
       CertNanny::Logging->error('MSG', "getCSRInfoHash(): Could not determine field <$var> from certificate signing request.");
-      return undef;
+      return;
     }
   }
 
-  return $info;
+  return $rc;
 } ## end sub getCSRInfoHash
 
 
@@ -1095,16 +1049,18 @@ sub convertCert {
   my %args = (CERTFORMAT => 'DER',
               OUTFORMAT  => 'DER',
               @_);                 # argument pair list
+              
+  my $rc;
                  
   # sanity checks
   foreach my $key (qw( CERTFORMAT OUTFORMAT )) {
     if ($args{$key} !~ m{ \A (?: DER | PEM ) \z }xms) {
       CertNanny::Logging->error('MSG', "convertCert(): Incorrect <$key>: <$args{$key}>");
-      return undef;
+      return;
     }
   }
 
-  my ($infile, $output);
+  my $infile;
 
   my $openssl = $self->{CONFIG}->get('cmd.openssl', 'CMD');
   
@@ -1116,7 +1072,7 @@ sub convertCert {
       if (!CertNanny::Util->writeFile(DSTFILE    => $infile,
                                       SRCCONTENT => $args{CERTDATA})) {
         CertNanny::Logging->error('MSG', "convertCert(): Could not write temporary file: <$infile>");
-        return undef;
+        return;
       }
       push(@cmd, CertNanny::Util->osq("$infile"));
     } else {
@@ -1126,18 +1082,18 @@ sub convertCert {
     push(@cmd, ('-inform',  $args{CERTFORMAT}));
     push(@cmd, ('-outform', $args{OUTFORMAT}));
 
-    $output->{CERTFORMAT} = $args{OUTFORMAT};
+    $rc->{CERTFORMAT} = $args{OUTFORMAT};
     my $result = CertNanny::Util->runCommand(\@cmd);
-    $output->{CERTDATA}   = join("", @{$result->{STDOUT}});
+    $rc->{CERTDATA}   = join("", @{$result->{STDOUT}});
     CertNanny::Util->forgetTmpFile('FILE', $infile);
 
     if ($result->{RC} != 0) {
       CertNanny::Logging->error('MSG', "convertCert(): Could not convert certificate");
-      return undef;
+      return;
     }
   }
 
-  return $output;
+  return $rc;
 } ## end sub convertCert
 
 
@@ -1207,7 +1163,7 @@ sub staticEngine {
     CertNanny::Logging->debug('MSG', "Output is <$output>\n");
     return $output =~ m/\(cs\).*\[ available \]/s;
   }
-  return undef;
+  return;
 } ## end sub staticEngine
 
 
@@ -1552,11 +1508,11 @@ C<getInstance()>
 
 C<runCommand()>
 
-C<timeStamp()>
-
 C<isoDateToEpoch()>
 
-C<expandDate()>
+C<epochToIsoDate()>
+
+C<expandStr()>
 
 C<printableIsoDate()>
 
@@ -1604,13 +1560,17 @@ The command to execute
 
 =back
 
-=item timeStamp()
-
-Returns the current time in ISO (UTC) timestamp format. Called globally.
-
 =item isoDateToEpoch($time)
 
 Convert an ISO date to a Unix timestamp (seconds since the Epoch). Returns Unix timestamp.
+Without paramter: Returns the current time in ISO (UTC) timestamp format.
+
+=over 4
+
+=item epochToIsoDate($time)
+
+Convert an Unix timestamp (seconds since the Epoch) to a ISO date. Returns ISO Date (YYYYMMDDHHMMSS).
+Without paramter: Returns the current time in ISO (UTC) timestamp format.
 
 =over 4
 
@@ -1620,7 +1580,7 @@ Time in ISO format (YYYYMMDDHHMMSS)
 
 =back
 
-=item expandDate($time)
+=item expandStr($format)
 
 Expand time format controls (subset as specified by date(1)). Always uses current time.
 
