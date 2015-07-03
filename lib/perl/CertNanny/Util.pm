@@ -750,7 +750,7 @@ sub getCertInfoHash {
               
   my $rc;
   
-  if (defined($args{CERTINFO})) {
+  if (exists($args{CERTINFO})) {
     $rc = $args{CERTINFO}
   } else {   
     # sanity checks
@@ -766,27 +766,29 @@ sub getCertInfoHash {
                    'modulus', 'fingerprint', 'sha1', 'pubkey', 
                    'purpose');
 
-    $rc = CertNanny::Util->callOpenSSL($command, \@params, %args);
-  
-    ####
-    # rewrite dates from human readable to ISO notation
-    foreach my $var (qw(NotBefore NotAfter)) {
-      my ($mon, $day, $hh, $mm, $ss, $year, $tz) = $rc->{$var} =~ /(\S+)\s+(\d+)\s+(\d+):(\d+):(\d+)\s+(\d+)\s*(\S*)/;
-      my $dmon = $month{$mon};
-      if (!defined $dmon) {
-        CertNanny::Logging->error('MSG', "getCertInfoHash(): could not parse month <$mon> in date <$rc->{$var}> returned by OpenSSL");
-        return;
-      }
+    if (defined($rc = CertNanny::Util->callOpenSSL($command, \@params, %args))) {
+      ####
+      # rewrite dates from human readable to ISO notation
+      foreach my $var (qw(NotBefore NotAfter)) {
+        my ($mon, $day, $hh, $mm, $ss, $year, $tz) = $rc->{$var} =~ /(\S+)\s+(\d+)\s+(\d+):(\d+):(\d+)\s+(\d+)\s*(\S*)/;
+        my $dmon = $month{$mon};
+        if (!defined $dmon) {
+          CertNanny::Logging->error('MSG', "getCertInfoHash(): could not parse month <$mon> in date <$rc->{$var}> returned by OpenSSL");
+          return;
+        }
 
-      $rc->{$var} = sprintf("%04d%02d%02d%02d%02d%02d", $year, $dmon, $day, $hh, $mm, $ss);
-    } ## end foreach my $var (qw(NotBefore NotAfter))
+        $rc->{$var} = sprintf("%04d%02d%02d%02d%02d%02d", $year, $dmon, $day, $hh, $mm, $ss);
+      } ## end foreach my $var (qw(NotBefore NotAfter))
 
-    # sanity checks
-    foreach my $var (qw(Version SerialNumber SubjectName IssuerName NotBefore NotAfter CertificateFingerprint Modulus)) {
-      if (!exists $rc->{$var}) {
-        CertNanny::Logging->error('MSG', "getCertInfoHash(): Could not determine field <$var> from X.509 certificate");
-        return;
+      # sanity checks
+      foreach my $var (qw(Version SerialNumber SubjectName IssuerName NotBefore NotAfter CertificateFingerprint Modulus)) {
+        if (!exists $rc->{$var}) {
+          CertNanny::Logging->error('MSG', "getCertInfoHash(): Could not determine field <$var> from X.509 certificate");
+          return;
+        }
       }
+    } else {
+      CertNanny::Logging->error('MSG', "getCertInfoHash(): Could not retrieve certificate info.");
     }
   }
 
