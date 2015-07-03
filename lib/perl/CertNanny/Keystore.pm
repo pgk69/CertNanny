@@ -963,9 +963,9 @@ sub k_getInfo {
 } ## end sub k_getInfo
 
 
-sub k_checkValidity {
+sub k_validEqualLessThan {
 
-  # return true if certificate is still valid for more than <days>
+  # return true if certificate is valid for more les/equal than <days>
   # return false otherwise
   # return undef on error
   my $self = shift;
@@ -976,8 +976,8 @@ sub k_checkValidity {
   CertNanny::Logging->debug('MSG', "Parsed not After Date: Timestamp: <$notAfter> ISO-Date: <$self->{CERT}->{CERTINFO}->{NotAfter}> CutOff: <$cutoff>");
 
   return unless defined $notAfter;
-  return ($cutoff < $notAfter);
-} ## end sub k_checkValidity
+  return ($cutoff >= $notAfter);
+} ## end sub k_validLessThan
 
 
 sub k_renew {
