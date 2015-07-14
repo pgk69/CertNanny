@@ -351,8 +351,8 @@ sub dummy () {
 #  #                           CA certificate files to be included in the PKCS#12
 #  #                           Required keys for entries: CERTFILE, CERTFORMAT, CERTINFO
 #  # 
-#  # Output: caller gets a hash ref:
-#  #           FILENAME    => created pkcs12 file to create
+#  # Output: caller gets undef if the operation failed or a hash ref:
+#  #           FILENAME     => created pkcs12 file
 #  # 
 #  # This method should generate a new pkcs12 file 
 #  # with all the items that are given
@@ -1917,14 +1917,14 @@ sub k_getCertType {
 } ## end sub k_getCertType
 
 
-sub _sendRequest_requestkeyfile {
+sub _sendRequest_newkeyfile {
   my $self = shift;
 
-  my $rc = $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{KEYFILE};
+  my $newkeyfile  = shift;
   
   if (!$self->_hasEngine()) {
     # get unencrypted new key in PEM format
-    my $newkey = $self->k_convertKey(KEYFILE   => $rc,
+    my $newkey = $self->k_convertKey(KEYFILE   => $newkeyfile,
                                      KEYPASS   => $self->{PIN} || $self->{OPTIONS}->{ENTRY}->{key}->{pin},
                                      KEYFORMAT => 'PEM',
                                      KEYTYPE   => 'OpenSSL',
@@ -1933,33 +1933,33 @@ sub _sendRequest_requestkeyfile {
 
     if (defined($newkey)) {
       # write new PEM encoded key to temp file
-      $rc = CertNanny::Util->getTmpFile();
-      chmod 0600, $rc;
+      $newkeyfile = CertNanny::Util->getTmpFile();
+      chmod 0600, $newkeyfile;
 
-      if (!CertNanny::Util->writeFile(DSTFILE    => $rc,
+      if (!CertNanny::Util->writeFile(DSTFILE    => $newkeyfile,
                                       SRCCONTENT => $newkey->{KEYDATA},
                                       FORCE      => 1)) {
-        CertNanny::Logging->error('MSG', "Could not write unencrypted copy of new file to temp file <$rc>");
-        $rc = undef;
+        CertNanny::Logging->error('MSG', "Could not write unencrypted copy of new keyfile to temp file <$newkeyfile>");
+        $newkeyfile = undef;
       }
     } else {
       CertNanny::Logging->error('MSG', "Could not convert new key");
-      $rc = undef;
+      $newkeyfile = undef;
     }
   }
   
-  return $rc
+  return $newkeyfile
 }
 
 
 sub _sendRequest_enroll {
   my $self = shift;
   
-  my $requestfile    = shift;
-  my $requestkeyfile = shift;
-  my $newcertfile    = shift;
+  my $requestfile = shift;
+  my $newkeyfile  = shift;
+  my $newcertfile = shift;
   
-  my %enrollerOptions = (sscep_enroll => {PrivateKeyFile => $requestkeyfile,
+  my %enrollerOptions = (sscep_enroll => {PrivateKeyFile => $newkeyfile,
                                           CertReqFile    => $requestfile,
                                           SignKeyFile    => undef,
                                           SignCertFile   => undef,
@@ -2007,7 +2007,7 @@ sub _sendRequest_enroll {
     $self->{STATE}->{DATA}->{SCEP}->{TRANSACTIONID} = $sscepInfo{TRANSACTIONID} if defined($sscepInfo{TRANSACTIONID});
 
     if (!$self->_hasEngine()) {
-      CertNanny::Util->forgetTmpFile('FILE', $requestkeyfile);
+      CertNanny::Util->forgetTmpFile('FILE', $newkeyfile);
       CertNanny::Util->forgetTmpFile('FILE', $enrollerOptions{sscep_enroll}{SignKeyFile})  if (defined($enrollerOptions{sscep_enroll}{SignKeyFile}));
       CertNanny::Util->forgetTmpFile('FILE', $enrollerOptions{sscep_enroll}{SignCertFile}) if (defined($enrollerOptions{sscep_enroll}{SignCertFile}));
     }
@@ -2026,27 +2026,23 @@ sub _sendRequest_initialEnrollment {
   my $config    = $options->{CONFIG};
 
   my $rc;
-  CertNanny::Logging->debug('MSG', "Install cert in initial enrollment, first build p12 to import into the final location.");
+  CertNanny::Logging->debug('MSG', "Install cert in initial enrollment.");
 
-  my $outp12 = File::Spec->catfile($entry->{statedir}, $entryname . "-import.p12");
-  chmod 0600, $outp12;
-
-  # Todo Arkadius: Macht das sinn? Config ist singleton. Besser $config direkt verwenden
-  # my $conf = CertNanny::Config->new($self->{OPTIONS}->{CONFIG}->{CONFIGFILE});
-  ##reset location to be passed correctly to the post install hook
-  # $entry->{location} = $conf->{CONFIG}->{keystore}->{$entryname}->{location};
-  my $keystore = $config->{CONFIG}->{keystore}->{$entryname};
+  my $keystore     = $config->{CONFIG}->{keystore}->{$entryname};
+  my $keystoretype = $entry->{initialenroll}->{targetType};
   $entry->{location}                     = $keystore->{location};
   $entry->{initialenroll}->{targetPIN} ||= $keystore->{key}->{pin};
-#  if (!$entry->{initialenroll}->{targetPIN} or $entry->{initialenroll}->{targetPIN} eq "") {
-#    $entry->{initialenroll}->{targetPIN} = $conf->{CONFIG}->{keystore}->{$entryname}->{key}->{pin};
-#  }
 
   my @cachain;
   push(@cachain, @{$self->{STATE}->{DATA}->{ROOTCACERTS}});
   push(@cachain, @{$self->{STATE}->{DATA}->{CERTCHAIN}});
 
-  my %args = (FILENAME     => $outp12,
+  my $p12File = File::Spec->catfile($entry->{statedir}, $entryname . "-import.p12");
+  chmod 0600, $p12File;
+
+  CertNanny::Logging->debug('MSG', "Build p12 import file <" . $p12File . ">.");
+
+  my %args = (FILENAME     => $p12File,
               FRIENDLYNAME => 'cert1',
               CACHAIN      => \@cachain,
               KEYFILE      => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{KEYFILE},
@@ -2054,34 +2050,31 @@ sub _sendRequest_initialEnrollment {
               CERTFILE     => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE},
               EXPORTPIN    => $entry->{initialenroll}->{targetPIN},
               PIN          => $keystore->{key}->{pin}
-#              PIN          => $conf->{CONFIG}->{keystore}->{$entryname}->{key}->{pin}
               );
 
-  # Todo Testen createPKCS12: Passt das noch? Die Methode war im Keystore als Dummy implementiert und nur in den Keys ausprogrammiert, wird aber ueber $self aufgerufen?!?
-  # Todo Testen createPKCS12: Was passiert hier? keine Zuweisung des Ergebnisses ....
-  my $exportp12 = $self->createPKCS12(%args);
-  CertNanny::Logging->debug('MSG', "Created importp12 file: " . $outp12);
-  my $target = $entry->{initialenroll}->{targetType};
-  CertNanny::Logging->debug('MSG', "Target keystore: " . $target);
-  if (!$exportp12) {
-    CertNanny::Logging->error('MSG', "Failed to create initial PKCS12 " . $target);
+  if (defined(my $exportp12 = $self->createPKCS12(%args))) {
+    $p12File = $exportp12->{FILENAME};
+    CertNanny::Logging->debug('MSG', "Created importp12 file <$exportp12->{FILENAME}> for target keystore type: $keystoretype");
+  } else {
+    CertNanny::Logging->debug('MSG', "failed to create importp12 file <$p12File> for target keystore type: $keystoretype");
     return;
   }
 
-  eval {eval "require CertNanny::Keystore::$target";};
+  CertNanny::Logging->debug('MSG', "Loading keystore module for keystore type <$keystoretype>");
+  eval {eval "require CertNanny::Keystore::$keystoretype";};
   if ($@) {
-    CertNanny::Logging->error('MSG', "Could not load $target keystore. Aborted. $@");
+    CertNanny::Logging->error('MSG', "Could not load keystore type <$keystoretype>. Aborted. $@");
     return;
-    # croak "Could not load $target keystore Aborted. $@";
+    # croak "Could not load $keystoretype keystore Aborted. $@";
     # $rc = 0;
   }
 
-  eval {my %p12args = (FILENAME  => $outp12,
+  CertNanny::Logging->debug('MSG', "Importing p12 <$p12File> into the final location.");
+  eval {my %p12args = (FILENAME  => $p12File,
                        PIN       => $entry->{initialenroll}->{targetPIN},
                        ENTRYNAME => $entryname,
                        ENTRY     => $entry,
                        CONF      => $config);
-#                       CONF      => $conf);
 
         # create pkcs12 file
         # in:
@@ -2090,7 +2083,7 @@ sub _sendRequest_initialEnrollment {
         # ENTRYNAME => certificate location
         # CONF => keystore config to be implemented
     
-        eval "CertNanny::Keystore::${target}::importP12( %p12args )";
+        eval "CertNanny::Keystore::${keystoretype}::importP12( %p12args )";
         if ($@) {
           CertNanny::Logging->error('MSG', "Problem calling importP12 $@");
           return;
@@ -2100,27 +2093,24 @@ sub _sendRequest_initialEnrollment {
     };
     
   if ($@) {
-    CertNanny::Logging->error('MSG', "Could not execute $target keystore importP12 function. Aborted. $@");
+    CertNanny::Logging->error('MSG', "Could not execute $keystoretype keystore importP12 function. Aborted. $@");
     return;
     # croak "Could not execute $target keystore importP12 function. Aborted. $@";
     # $rc = 0;
   }
 
-  CertNanny::Logging->debug('MSG', "Completed. Clean up after initial enrollment and p12 import.");
+  CertNanny::Logging->debug('MSG', "P12 creation and import of <$p12File> completed. Clean up after initial enrollment and p12 import.");
   if ($entry->{initialenroll}->{auth}->{mode} eq "password" or
       $entry->{initialenroll}->{auth}->{mode} eq "anonymous") {
 
-    my $selfsigncert = $entryname . "-selfcert.pem";
-    my $outCert = File::Spec->catfile($entry->{statedir}, $selfsigncert);
-    CertNanny::Logging->debug('MSG', "delete selfsign cert: " . $outCert);
-
+    my $outCert = File::Spec->catfile($entry->{statedir}, $entryname . "-selfcert.pem");
     if (-e $outCert) {
       CertNanny::Util->wipe(FILE => $outCert, SECURE => 1);
-      CertNanny::Logging->debug('MSG', "deleted " . $outCert);
+      CertNanny::Logging->debug('MSG', "Selfsigned cert <$outCert> deleted.");
     }
   } ## end if ($entry->...)
 
-  CertNanny::Util->wipe(FILE => $outp12, SECURE => 1);
+  CertNanny::Util->wipe(FILE => $p12File, SECURE => 1);
   
   return 1;
 }
@@ -2138,20 +2128,18 @@ sub _sendRequest {
   my $rc;
 
   if ($self->k_getAvailableCaCerts()) {
-    if (!exists $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE}) {
-      $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE} = File::Spec->catfile($entry->{statedir}, $entryname . "-cert.pem");
-    }
+    $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE} ||= File::Spec->catfile($entry->{statedir}, $entryname . "-cert.pem");
     my $newcertfile = $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE};
     my $requestfile = $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{REQUESTFILE};
-    my $requestkeyfile = $self->_sendRequest_requestkeyfile();
-    if (!defined($requestkeyfile)) {
+    my $newkeyfile  = $self->_sendRequest_newkeyfile($self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{KEYFILE});
+    if (!defined($newkeyfile)) {
       CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3]);
       return;
     }
 
     my $scepchecksubjectname = (defined $entry->{scepchecksubjectname}) ? $entry->{scepchecksubjectname} : 'no';
     CertNanny::Logging->debug('MSG', "request:              <$requestfile>");
-    CertNanny::Logging->debug('MSG', "keyfile:              <$requestkeyfile>");
+    CertNanny::Logging->debug('MSG', "keyfile:              <$newkeyfile>");
     CertNanny::Logging->debug('MSG', "sscep:                <" . $config->get('cmd.sscep') . ">");
     CertNanny::Logging->debug('MSG', "scepurl:              <" . $entry->{enroll}->{sscep}->{URL} . ">");
     CertNanny::Logging->debug('MSG', "scepsignaturekey:     <$entry->{scepsignaturekey}" . ">");
@@ -2160,7 +2148,7 @@ sub _sendRequest {
     CertNanny::Logging->debug('MSG', "newcertfile:          <$newcertfile>");
     CertNanny::Logging->debug('MSG', "openssl:              <" . $options->{'cmd.openssl'} . ">");
 
-    if (!$self->_sendRequest_enroll($requestfile, $requestkeyfile, $newcertfile)) {
+    if (!$self->_sendRequest_enroll($requestfile, $newkeyfile, $newcertfile)) {
       CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3]);
       return;
     }
@@ -2175,14 +2163,8 @@ sub _sendRequest {
                                                               CERTFORMAT => 'PEM');
 
       # build new certificate chain
-      $self->{STATE}->{DATA}->{CERTCHAIN} = $self->k_buildCertificateChain($newcert);
-
-      if (defined $self->{STATE}->{DATA}->{CERTCHAIN}) {
-        $self->k_executeHook($entry->{hook}->{renewal}->{install}->{pre},
-                             '__NEWCERT_NOTAFTER__'  => $newcert->{CERTINFO}->{NotAfter},
-                             '__NEWCERT_NOTBEFORE__' => $newcert->{CERTINFO}->{NotBefore},);
-
-
+      if (defined($self->{STATE}->{DATA}->{CERTCHAIN} = $self->k_buildCertificateChain($newcert))) {
+        $self->k_executeHook($entry->{hook}->{renewal}->{install}->{pre});
 
         if (exists $entry->{INITIALENROLLEMNT} and $entry->{INITIALENROLLEMNT} eq 'yes') {
           $rc = self->_sendRequest_initialEnrollment();
@@ -2191,9 +2173,18 @@ sub _sendRequest {
                                    CERTFORMAT => 'PEM') || 0;
         }
 
+        # ToDo: Is __LOCATION__, __SUBJECT__ and __STATE__ set to correct values?
         $self->k_executeHook($entry->{hook}->{renewal}->{install}->{post},
+                             '__ENTRY__'             => $entryname,
+                             '__LOCATION__'          => CertNanny::Util->osq("$entry->{location}"),
+                             '__SUBJECT__'           => CertNanny::Util->osq("$newcert->{CERTINFO}->{SubjectName}" )   || 'UnknownSubject',
+                             '__SERIAL__'            => $newcert->{CERTINFO}->{SerialNumber}           || 'UnknownSerial',
+                             '__FINGERPRINT__'       => $newcert->{CERTINFO}->{CertificateFingerprint} || 'UnknownFingerprint',
+                             '__NOTAFTER__'          => $newcert->{CERTINFO}->{NotAfter},
+                             '__NOTBEFORE__'         => $newcert->{CERTINFO}->{NotBefore},
+                             '__STATE__'             => $self->{STATE}->{DATA}->{RENEWAL}->{STATUS},              
                              '__NEWCERT_NOTAFTER__'  => $newcert->{CERTINFO}->{NotAfter},
-                             '__NEWCERT_NOTBEFORE__' => $newcert->{CERTINFO}->{NotBefore},) if (defined($rc));;
+                             '__NEWCERT_NOTBEFORE__' => $newcert->{CERTINFO}->{NotBefore}) if (defined($rc));;
 
         # done
       } else {
