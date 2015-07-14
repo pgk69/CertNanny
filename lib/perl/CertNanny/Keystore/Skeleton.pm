@@ -499,7 +499,7 @@ sub generateKey {
 } ## end sub generateKey
 
 
-sub _createPKCS12 {
+sub createPKCS12 {
   ###########################################################################
   #
   # create pkcs12 file
@@ -517,8 +517,8 @@ sub _createPKCS12 {
   #                           CA certificate files to be included in the PKCS#12
   #                           Required keys for entries: CERTFILE, CERTFORMAT, CERTINFO
   # 
-  # Output: caller gets a hash ref:
-  #           FILENAME    => created pkcs12 file to create
+  # Output: caller gets undef if the operation failed or a hash ref:
+  #           FILENAME    => created pkcs12 file
   # 
   # This method should generate a new pkcs12 file 
   # with all the items that are given
