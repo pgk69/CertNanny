@@ -2070,28 +2070,11 @@ sub _sendRequest_initialEnrollment {
   }
 
   CertNanny::Logging->debug('MSG', "Importing p12 <$p12File> into the final location.");
-  eval {my %p12args = (FILENAME  => $p12File,
-                       PIN       => $entry->{initialenroll}->{targetPIN},
-                       ENTRYNAME => $entryname,
-                       ENTRY     => $entry,
-                       CONF      => $config);
-
-        # create pkcs12 file
-        # in:
-        # FILENAME => pkcs12 file to create
-        # PIN => cert label to be used in pkcs#12 structure
-        # ENTRYNAME => certificate location
-        # CONF => keystore config to be implemented
-    
-        eval "CertNanny::Keystore::${keystoretype}::importP12( %p12args )";
-        if ($@) {
-          CertNanny::Logging->error('MSG', "Problem calling importP12 $@");
-          return;
-          # croak "Problem calling importP12 $@";
-          # $rc = 0;
-        }
-    };
-    
+  eval "CertNanny::Keystore::${keystoretype}::importP12(FILENAME  => $p12File,
+                                                        PIN       => $entry->{initialenroll}->{targetPIN},
+                                                        ENTRYNAME => $entryname,
+                                                        ENTRY     => $entry,
+                                                        CONF      => $config)";
   if ($@) {
     CertNanny::Logging->error('MSG', "Could not execute $keystoretype keystore importP12 function. Aborted. $@");
     return;
@@ -2173,7 +2156,7 @@ sub _sendRequest {
                                    CERTFORMAT => 'PEM') || 0;
         }
 
-        # ToDo: Is __LOCATION__, __SUBJECT__ and __STATE__ set to correct values?
+        # ToDo pgk: Is __LOCATION__, __SUBJECT__ and __STATE__ set to correct values?
         $self->k_executeHook($entry->{hook}->{renewal}->{install}->{post},
                              '__ENTRY__'             => $entryname,
                              '__LOCATION__'          => CertNanny::Util->osq("$entry->{location}"),
