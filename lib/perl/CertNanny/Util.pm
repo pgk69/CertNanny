@@ -432,7 +432,6 @@ sub writeFile {
   #
   # Example: $self->writeFile(DSTFILE => $filename, SRCCONTENT => $data, FORCE => 1);
   #
-  #CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " write file/content to disk");
   my $self = (shift)->getInstance();
   my %args = (@_);
 
@@ -499,7 +498,6 @@ sub writeFile {
       }
     }
   }
-  #CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " write file/content to disk");
   return $rc;
 } ## end sub writeFile
 
@@ -1103,7 +1101,6 @@ sub getTmpFile {
   # NOTE: this is UNSAFE (beware of race conditions). We cannot use a file
   # handle here because we are calling external programs to use these
   # temporary files.
-  #CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get a tmp file");
   my $self = (shift)->getInstance();
 
   my ($tmpdir, $template, $tmpfile);
@@ -1114,13 +1111,11 @@ sub getTmpFile {
     push(@{$self->{TMPFILE}}, $tmpfile);
   }
   
-  # CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get a tmp file");
   return $tmpfile;
 } ## end sub getTmpFile
 
 
 sub forgetTmpFile {
-  #CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get a tmp file");
   my $self = (shift)->getInstance();
   my %args = ('DELETE', 1,
               @_);
@@ -1128,10 +1123,9 @@ sub forgetTmpFile {
   my $rc = 1;           
   if (defined($args{FILE})) {            
     @{$self->{TMPFILE}} = grep {$_ ne $args{FILE}} @{$self->{TMPFILE}};
-    if ($args{DELETE}) {eval {$rc = CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1)}}
+    CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1) if ($args{DELETE});
   }         
   
-  # CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get a tmp file");
   return $rc;
 } ## end sub getTmpFile
 
@@ -1467,14 +1461,17 @@ sub wipe {
     if ($args{SECURE}) {
       my $bytes = -s $args{FILE};
       if ($bytes > 0) {
-        open(FILE, '+<', $args{FILE});
-        seek(FILE, 0, 0);
-        print FILE pack('h*', $args{FF} x $bytes);
-        close(FILE);
-        open(FILE, '+<', $args{FILE});
-        seek(FILE, 0, 0);
-        print FILE pack('h*', $args{'00'} x $bytes);
-        close(FILE);
+        eval {open(FILE, '+<', $args{FILE});
+              seek(FILE, 0, 0);
+              print FILE pack('h*', $args{FF} x $bytes);
+              close(FILE);
+              open(FILE, '+<', $args{FILE});
+              seek(FILE, 0, 0);
+              print FILE pack('h*', $args{'00'} x $bytes);
+              close(FILE);};
+        if ($@) {
+          CertNanny::Logging->error('MSG', "Unable to secure delete <$args{FILE}>: ", join('', $@));
+        }
       }
     }
     unlink $args{FILE};

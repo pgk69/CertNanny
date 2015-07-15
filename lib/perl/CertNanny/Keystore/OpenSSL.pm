@@ -1406,7 +1406,7 @@ sub installRoots {
               }
             }    
           }
-          eval {CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);};
+          CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);
         }  
       }
     }

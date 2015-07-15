@@ -117,7 +117,6 @@ sub setOption {
 
 
 sub getOption {
-  # CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3]);
   my $self  = (shift)->getInstance();
   my $key   = shift;
 
@@ -126,7 +125,6 @@ sub getOption {
     $value = $self->{OPTION}->{$key};
   }
 
-  # CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Key: <$key>  Value: <", defined($value) ? $value.">" : "undefined>");
   return $value;
 } ## end sub setOption
 
@@ -443,17 +441,17 @@ sub _do_enroll_savekeystore {
 
   my $save;
 
-  # Change keystore attributes to instantitate a openSSL keystore with the entrollment certificate
-  $entry->{initialenroll}->{targetType}     = $entry->{type};
-  $entry->{initialenroll}->{targetLocation} = $entry->{location};
-  $entry->{initialenroll}->{targetPIN}      = $entry->{key}->{pin};
-
   # Saving old Values
   $save->{type}                             = $entry->{type};
   $save->{location}                         = $entry->{location};
   $save->{keyformat}                        = $entry->{key}->{format};
   $save->{keyfile}                          = $entry->{key}->{file};
   $save->{pin}                              = $entry->{key}->{pin};
+
+  # Change keystore attributes to instantitate a openSSL keystore with the entrollment certificate
+  $entry->{initialenroll}->{targetType}     = $entry->{type};
+  $entry->{initialenroll}->{targetLocation} = $entry->{location};
+  $entry->{initialenroll}->{targetPIN}      = $entry->{key}->{pin};
 
   # Setting new values
   $entry->{type}                            = 'OpenSSL';
@@ -518,18 +516,20 @@ sub _do_enroll_certificate {
 
   CertNanny::Util->setVariable('NAME',  'KEYSTORE',
                                'VALUE', $entryname);
-  my $keystore = CertNanny::Keystore->new(CONFIG    => $self->{CONFIG},
+                               
+  #                                
+  my $enrollmentkeystore = CertNanny::Keystore->new(CONFIG    => $self->{CONFIG},
                                           ENTRY     => $self->{ITEMS}->{$entryname},
                                           ENTRYNAME => $entryname);
-  if ($keystore) {
-    $keystore->{INSTANCE}->{OPTIONS}->{ENTRY}->{INITIALENROLLEMNT} = 'yes';
+  if ($enrollmentkeystore) {
+    $enrollmentkeystore->{INSTANCE}->{OPTIONS}->{ENTRY}->{INITIALENROLLEMNT} = 'yes';
 
     #disable engine specific configuration
-    $keystore->{INSTANCE}->{OPTIONS}->{ENTRY}->{enroll}->{engine_section}  = undef;
-    $keystore->{INSTANCE}->{OPTIONS}->{ENTRY}->{enroll}->{sscep}->{engine} = undef;
+    $enrollmentkeystore->{INSTANCE}->{OPTIONS}->{ENTRY}->{enroll}->{engine_section}  = undef;
+    $enrollmentkeystore->{INSTANCE}->{OPTIONS}->{ENTRY}->{enroll}->{sscep}->{engine} = undef;
 
     #Start the initial enrollment running an native openSSL keystore renewal
-    $keystore->{INSTANCE}->k_renew();
+    $enrollmentkeystore->{INSTANCE}->k_renew();
 
     # Restoring old values
     $self->_do_enroll_restorekeystore(%args,
@@ -707,23 +707,27 @@ sub do_enroll {
   my $self      = (shift)->getInstance();
   my %args      = (@_);
 
-  # NO KEYSTORE in %args!!!
-  my $entryname = $args{ENTRYNAME};
-
   my $rc;
 
-  CertNanny::Util->backoffTime($self->{CONFIG});
+  if (defined($args{KEYSTORE})) {
+    # NO KEYSTORE in %args allowed!!!
+    CertNanny::Logging->error('MSG', "Initial enrollment on an existing keystore is not supported");
+  } else {  
+    my $entryname = $args{ENTRYNAME};
 
-  if (defined(my $authmethode = $self->{ITEMS}->{$entryname}->{initialenroll}->{auth}->{mode})) {
-    if ($authmethode eq 'certificate') {
-      $rc = $self->_do_enroll_certificate(%args);
-    } elsif ($authmethode eq 'password') {
-      $rc = $self->_do_enroll_password(%args);
-    } elsif ($authmethode eq 'anonymous') {
-      $rc = $self->_do_enroll_password(%args);
-    } else {
-      CertNanny::Logging->error('MSG', "Initial enrollment authentication method " . $$authmethode . " not supported");
-    } 
+    CertNanny::Util->backoffTime($self->{CONFIG});
+
+    if (defined(my $authmethode = $self->{ITEMS}->{$entryname}->{initialenroll}->{auth}->{mode})) {
+      if ($authmethode eq 'certificate') {
+        $rc = $self->_do_enroll_certificate(%args);
+      } elsif ($authmethode eq 'password') {
+        $rc = $self->_do_enroll_password(%args);
+      } elsif ($authmethode eq 'anonymous') {
+        $rc = $self->_do_enroll_password(%args);
+      } else {
+        CertNanny::Logging->error('MSG', "Initial enrollment authentication method " . $$authmethode . " not supported");
+      } 
+    }
   }
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Enrollment");
   return $rc;

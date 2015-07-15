@@ -932,7 +932,7 @@ sub installRoots {
         if (!File::Copy::copy($locName, $entry->{location})) {
           $rc = !CertNanny::Logging->error('MSG', "Could not copy new store <$locName> to current store <$entry->{location}>");
         } else {
-          eval {CertNanny::Util->wipe(FILE => $locName, SECURE => 1);};
+          CertNanny::Util->wipe(FILE => $locName, SECURE => 1);
         }
       }
     }

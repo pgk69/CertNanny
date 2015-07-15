@@ -661,12 +661,12 @@ sub installRoots {
               }
             }
             # cleanup 
-            eval {CertNanny::Util->wipe(FILE => $tmpKey, SECURE => 1);};
-            eval {CertNanny::Util->wipe(FILE => $$tmpCert, SECURE => 1);};
-            eval {CertNanny::Util->wipe(FILE => $$tmpP12, SECURE => 1);};
+            CertNanny::Util->wipe(FILE => $tmpKey, SECURE => 1);
+            CertNanny::Util->wipe(FILE => $$tmpCert, SECURE => 1);
+            CertNanny::Util->wipe(FILE => $$tmpP12, SECURE => 1);
           }
           # cleanup 
-          eval {CertNanny::Util->wipe(FILE => $$CAListFile, SECURE => 1);};
+          CertNanny::Util->wipe(FILE => $$CAListFile, SECURE => 1);
         }
       }
     }

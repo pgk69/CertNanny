@@ -540,23 +540,23 @@ sub k_storeState {
           CertNanny::Logging->debug('MSG', "Moving tmp. statefile <$tmpFile> to <$file>.");
           if (File::Copy::move($tmpFile, $file)) {
             CertNanny::Logging->debug('MSG', "Wiping backupfile <$bakFile>.");
-            eval {CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);};
+            CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);
           } else {
             CertNanny::Logging->debug('MSG', "Error moving <$tmpFile> to <$file>. Rollback.");
             File::Copy::move($bakFile, $file);
-            eval {CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);};
+            CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);
             return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
           }
         } else {
           CertNanny::Logging->debug('MSG', "Error creating backup <$bakFile> of state file <$file>");
-          eval {CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);};
+          CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);
           return "Error creating backup <$bakFile> of state file <$file>";
         }
       } else {
         CertNanny::Logging->debug('MSG', "Statefile <$file> does not exists. No backup needed.");
         if (!File::Copy::move($tmpFile, $file)) {
           CertNanny::Logging->debug('MSG', "Error moving keystore tmp. state file <$tmpFile> to <$file>");
-          eval {CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);};
+          CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);
           return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
         }
       }
@@ -614,11 +614,11 @@ sub k_checkclearState {
   if ($forceClear || $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} == 0) {
     foreach my $entry (qw( CERTFILE KEYFILE REQUESTFILE TEMPKEYSTORE )) {
       CertNanny::Logging->debug('MSG', 'Wiping'.$self->{STATE}->{DATA}->{RENEWAL}->{$entry});
-      eval {CertNanny::Util->wipe(FILE => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}, SECURE => 1);};
+      CertNanny::Util->wipe(FILE => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}, SECURE => 1);
     }
 
     # delete state file
-    eval {CertNanny::Util->wipe(FILE => $self->{OPTIONS}->{ENTRY}->{statefile}, SECURE => 1);};
+    CertNanny::Util->wipe(FILE => $self->{OPTIONS}->{ENTRY}->{statefile}, SECURE => 1);
 
     $self->{STATE}->{DATA} = undef;
   }
@@ -1461,7 +1461,7 @@ sub k_getInstalledNonRootCerts {
                            '__FINGERPRINT__' => $self->{hook}->{FP},
                            '__TARGET__'      => $self->{hook}->{Target});
     }
-    eval {delete($self->{hook});};
+    delete($self->{hook});
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get all certificates, that are no root certificates");
@@ -1747,7 +1747,7 @@ sub k_syncRootCAs {
                            '__FINGERPRINT__' => $self->{hook}->{FP},
                            '__TARGET__'      => $self->{hook}->{Target});
     }
-    eval {delete($self->{hook});};
+    delete($self->{hook});
   } else {
     CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
   }
@@ -2042,17 +2042,14 @@ sub _sendRequest_initialEnrollment {
 
   CertNanny::Logging->debug('MSG', "Build p12 import file <" . $p12File . ">.");
 
-  my %args = (FILENAME     => $p12File,
-              FRIENDLYNAME => 'cert1',
-              CACHAIN      => \@cachain,
-              KEYFILE      => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{KEYFILE},
-              CERTFORMAT   => 'PEM',
-              CERTFILE     => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE},
-              EXPORTPIN    => $entry->{initialenroll}->{targetPIN},
-              PIN          => $keystore->{key}->{pin}
-              );
-
-  if (defined(my $exportp12 = $self->createPKCS12(%args))) {
+  if (defined(my $exportp12 = $self->createPKCS12(FILENAME     => $p12File,
+                                                  FRIENDLYNAME => 'cert1',
+                                                  CACHAIN      => \@cachain,
+                                                  KEYFILE      => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{KEYFILE},
+                                                  CERTFORMAT   => 'PEM',
+                                                  CERTFILE     => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE},
+                                                  EXPORTPIN    => $entry->{initialenroll}->{targetPIN},
+                                                  PIN          => $keystore->{key}->{pin}))) {
     $p12File = $exportp12->{FILENAME};
     CertNanny::Logging->debug('MSG', "Created importp12 file <$exportp12->{FILENAME}> for target keystore type: $keystoretype");
   } else {
@@ -2061,7 +2058,7 @@ sub _sendRequest_initialEnrollment {
   }
 
   CertNanny::Logging->debug('MSG', "Loading keystore module for keystore type <$keystoretype>");
-  eval {eval "require CertNanny::Keystore::$keystoretype";};
+  eval "require CertNanny::Keystore::$keystoretype";
   if ($@) {
     CertNanny::Logging->error('MSG', "Could not load keystore type <$keystoretype>. Aborted. $@");
     return;

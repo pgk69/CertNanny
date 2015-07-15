@@ -232,12 +232,12 @@ sub switchLogging {
   my $target = substr($args{TARGET}, 3);
   if ($args{STATUS}) {
     if (defined($args{FILE})) {
-      eval {CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1)} if $args{CLEAR};
+      CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1) if $args{CLEAR};
       eval {mkdir(dirname($args{FILE}))};
       $target .= ":$args{FILE}";
     }
     if (defined($args{FILELAST})) {
-      eval {CertNanny::Util->wipe(FILE => $args{FILELAST}, SECURE => 1)} if $args{CLEAR};
+      CertNanny::Util->wipe(FILE => $args{FILELAST}, SECURE => 1) if $args{CLEAR};
       eval {mkdir(dirname($args{FILELAST}))};
       $target .= " (last):$args{FILELAST}";
     }
@@ -248,11 +248,11 @@ sub switchLogging {
     $logTarget{$args{TARGET}} = 1;
   } else {
     if (defined($args{FILE})) {
-      eval {CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1)} if $args{CLEAR};
+      CertNanny::Util->wipe(FILE => $args{FILE}, SECURE => 1) if $args{CLEAR};
       $target .= ": $args{FILE}";
     }
     if (defined($args{FILELAST})) {
-      eval {CertNanny::Util->wipe(FILE => $args{FILELAST}, SECURE => 1)} if $args{CLEAR};
+      CertNanny::Util->wipe(FILE => $args{FILELAST}, SECURE => 1) if $args{CLEAR};
       $target .= " (last): $args{FILELAST}";
     }
     if ($logTarget{$args{TARGET}})  {
