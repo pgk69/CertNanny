@@ -157,12 +157,9 @@ sub new {
 
   # RETRIEVE AND STORE STATE
   # get previous renewal status
-  $self->k_retrieveState() || return undef;
-
+  return if !defined($self->k_retrieveState());
   # check if we can write to the file
-  if (my $storeErrState = $self->k_storeState()) {
-    return $storeErrState;
-  }
+  return if !defined($self->k_storeState());
 
   # return new keystore object
   return $self;
@@ -288,7 +285,7 @@ sub installCert {
 
   # This is the location for the NEW XML
   my $new_xml_file = File::Spec->catfile($certnanny_to_sap_dir, $xml_filename);
-  if (!CertNanny::Util->wipe(FILE => $old_xml_file, SECURE => 1)) {
+  if (!defined(CertNanny::Util->wipe(FILE => $old_xml_file, SECURE => 1))) {
     CertNanny::Logging->error('MSG', "Could not delete old XML file. Will continue to prevent loss of renewed certificate.");
   }
 

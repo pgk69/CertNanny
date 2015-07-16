@@ -66,12 +66,9 @@ sub new {
 
   # RETRIEVE AND STORE STATE
   # get previous renewal status
-  $self->k_retrieveState() || return undef;
-
+  return if !defined($self->k_retrieveState());
   # check if we can write to the file
-  if (my $storeErrState = $self->k_storeState()) {
-    return $storeErrState;
-  }
+  return if !defined($self->k_storeState());
 
   # return new keystore object
   return $self;
@@ -420,12 +417,12 @@ sub importP12 {
   #CertNanny::Logging->debug('MSG',  "import pkcs12 file entry". Dumper($entry));
  
   my $origin = File::Spec->canonpath($args{FILENAME}); 
-  my $dest = File::Spec->canonpath($entry->{initialenroll}->{targetLocation});
+  my $dest = File::Spec->canonpath($entry->{initialenroll}->{target}->{location});
   CertNanny::Logging->debug('MSG', "origin: $origin dest: $dest ");
   
   if(! copy($origin,$dest)){
   	 CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILENAME} ");
-#  if (!CertNanny::Util->writeFile(DSTFILE    => $entry->{initialenroll}->{targetLocation},
+#  if (!CertNanny::Util->writeFile(DSTFILE    => $entry->{initialenroll}->{target}->{location},
 #                                 SRCFILE => $args{FILENAME} ,
 #                                  FORCE      => 0)) {
 #    CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILENAME} ");

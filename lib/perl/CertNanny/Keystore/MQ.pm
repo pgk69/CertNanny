@@ -86,12 +86,9 @@ sub new {
 
   # RETRIEVE AND STORE STATE
   # get previous renewal status
-  $self->k_retrieveState() || return undef;
-
+  return if !defined($self->k_retrieveState());
   # check if we can write to the file
-  if (my $storeErrState = $self->k_storeState()) {
-    return $storeErrState;
-  }
+  return if !defined($self->k_storeState());
 
   # return new keystore object
   return $self;

@@ -99,12 +99,9 @@ sub new {
 
   # RETRIEVE AND STORE STATE
   # get previous renewal status
-  $self->k_retrieveState() || return undef;
-
+  return if !defined($self->k_retrieveState());
   # check if we can write to the file
-  if (my $storeErrState = $self->k_storeState()) {
-    return $storeErrState;
-  }
+  return if !defined($self->k_storeState());
 
   # return new keystore object
   return $self;
@@ -256,7 +253,7 @@ sub installCert {
 
   # delete request, otherwise certnanny thinks we have a pending request...
   if (-e $requestfile) {
-    unless (CertNanny::Util->wipe(FILE => $requestfile, SECURE => 1)) {
+    unless (defined(CertNanny::Util->wipe(FILE => $requestfile, SECURE => 1))) {
       CertNanny::Logging->error('MSG', "installCert(): Could not delete the old csr. Since the certificate was already installed, this is *critical*. Delete it manually or the next renewal will fail.");
     }
   }
@@ -904,7 +901,7 @@ sub _checkRequestSanity() {
       CertNanny::Logging->info('MSG', "There is no pending request in the keystore so the current csr will be deleted.");
 
       # 4.1.1 delete the csr
-      unless (CertNanny::Util->wipe(FILE => $csrfile, SECURE => 1)) {
+      unless (defined(CertNanny::Util->wipe(FILE => $csrfile, SECURE => 1))) {
         CertNanny::Logging->error('MSG', "Could not delete csr $csrfile. Please remove manually.");
         return undef;
       }
@@ -932,7 +929,7 @@ sub _checkRequestSanity() {
     unless (defined $request_key) {
 
       # 4.2.1 delete the csr
-      unless (CertNanny::Util->wipe(FILE => $csrfile, SECURE => 1)) {
+      unless (defined(CertNanny::Util->wipe(FILE => $csrfile, SECURE => 1))) {
         CertNanny::Logging->error('MSG', "Could not delete csr $csrfile. Please remove manually.");
         return undef;
       }
@@ -994,7 +991,7 @@ sub _installCertchain() {
         return undef;
       }
 
-      unless (CertNanny::Util->wipe(FILE => $rootToInstall, SECURE => 1)) {
+      unless (defined(CertNanny::Util->wipe(FILE => $rootToInstall, SECURE => 1))) {
         CertNanny::Logging->error('MSG', "_installCertchain(): Could not delete root tmp file. Since the certificate was already installed no worries.");
       }
     } else {
@@ -1019,7 +1016,7 @@ sub _installCertchain() {
         return undef;
       }
 
-      unless (CertNanny::Util->wipe(FILE => $CAToInstall, SECURE => 1)) {
+      unless (defined(CertNanny::Util->wipe(FILE => $CAToInstall, SECURE => 1))) {
         CertNanny::Logging->error('MSG', "_installCertchain(): Could not delete CA tmp file. Since the certificate was already installed no worries.");
       }
     } ## end else [ if ($chaincert->{CERTINFO...})]
