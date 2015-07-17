@@ -281,35 +281,6 @@ sub createRequest {
 }
 
 
-sub selfSign {
-  ###########################################################################
-  #
-  # sign the ceritifate
-  # 
-  # Input: -
-  # 
-  # Output: caller gets a hash ref:
-  #           CERT => file containing the signed certificate
-  # 
-  # This signs the current certifiate
-  # This method should selfsign the current certificate.
-  #
-  # You may want to inherit this class from CertNanny::Keystore::OpenSSL if
-  # you wish to generate the private key 'outside' of your keystore and 
-  # import this information later.
-  # In this case use the following code:
-  # sub selfSign {
-  #   my $self = shift;
-  #   return $self->SUPER::selfSign(@_) if $self->can("SUPER::selfSign");
-  # }
-  #
-  # If you are able to directly operate on your keystore to generate keys
-  # and requests, you might choose to do all this yourself here:
-  my $self     = shift;
-  return $self->SUPER::selfSign(@_) if $self->can("SUPER::selfSign");
-}
-
-
 sub generateKey {
   ###########################################################################
   #

@@ -34,7 +34,7 @@ use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION);
 use Exporter;
 
 @EXPORT = qw(runCommand isoDateToEpoch epochToIsoDate expandStr 
-             printableIsoDate readFile writeFile getCertSHA1
+             printableIsoDate readFile writeFile createSelfSign getCertSHA1
              getCertFormat getCertInfoHash getCSRInfoHash parseCertData 
              getTmpFile forgetTmpFile wipe staticEngine encodeBMPString writeOpenSSLConfig 
              getDefaultOpenSSLConfig backoffTime getMacAddresses 
@@ -134,9 +134,15 @@ sub osq {
 sub Exit {
   my $self = (shift)->getInstance();
   my %args = (RC  => 0,
+              ERR => '',
               MSG => '',
               @_);                 # argument pair list
 
+  if ($args{ERR} ne '') {
+    $args{MSG} = $args{ERR} if !$args{MSG};
+    CertNanny::Logging->Err('STR', $args{MSG});
+  }
+  
   if ($args{RC}) {
     CertNanny::Logging->error('MSG', $args{MSG}) if ($args{MSG});
   } else {
@@ -500,6 +506,152 @@ sub writeFile {
   }
   return $rc;
 } ## end sub writeFile
+
+
+sub createSelfSign {
+  ###########################################################################
+  #
+  # create a selsigned certificate
+  # 
+  # Input:    FQDN      => Full qualified domain name
+  #                        Defaults to $entry->{statedir}/$entryname-selfcert.pem
+  #           CERTFILE  => certificate filename to be written
+  #                        Defaults to $entry->{statedir}/$entryname-selfcert.pem
+  #           KEYFILE   => key filename to be written
+  #                        Defaults to $entry->{key}->{file}
+  #           DIGEST    => Digest to sign with (md5, sha1, md2, mdc2, md4)
+  #                        Defaults to sha1
+  #           PIN       => Digest to sign with (md5, sha1, md2, mdc2, md4)
+  #                        Defaults to $entry->{key}->{pin} or ''
+  #           ENTRYNAME => based on this value the file name to be read
+  #                        Only used if CERTFILE is not given
+  #           ENTRY     => based on this entry the selfsigned certificate is
+  #                        Only used if KEYFILE or CERTFILE is not given
+  # 
+  # Output: caller gets a hash ref:
+  #           KEY  => file containing the key
+  #           CERT => file containing the signed certificate
+  # 
+  # This signs the current certifiate
+  # This method should selfsign the current certificate.
+  #
+  my $self = (shift)->getInstance();
+  my %args = ('FQDN'      => '',
+              'CERTFILE'  => '',
+              'KEYFILE'   => '',
+              'DIGEST'    => 'sha1',
+              'PIN'       => '',
+              'ENTRY'     => '',
+              'ENTRYNAME' => '',
+              @_);
+
+  my $fqdn      = $args{FQDN};
+  my $certfile  = $args{CERTFILE};
+  my $keyfile   = $args{KEYFILE};
+  my $digest    = "-$args{DIGEST}";
+  my $pin       = $args{PIN};
+  my $entry     = $args{ENTRY};
+  my $entryname = $args{ENTRYNAME};
+  
+  # SANITY CHECKS
+  # sanity check: FQDN must be set
+  if ($fqdn eq '') {
+    # for inital enrollment we override the DN to use the configured desiered DN rather then the preset enrollment certificates DN
+    eval {$fqdn = (defined($entry->{initialenroll}->{activ})) ? $entry->{initialenroll}->{subject} : Net::Domain::hostfqdn();};
+    if ($@ || ($fqdn eq '')) {
+      CertNanny::Logging->error('MSG', "FQDN <$fqdn> must be one set");
+      return;
+    }
+    CertNanny::Logging->debug('MSG', "Full Qualified Domain name: <$fqdn>");
+  }
+
+  # sanity check: Either CERTFILE or ENTRY and ENTRYNAME must be given
+  if ($certfile eq '') {
+    if (ref($entry) && ($entryname ne '')) {
+      eval {$certfile = File::Spec->catfile($entry->{statedir}, $entryname . "-selfcert.pem");};
+    }
+    if ($@ || ($certfile eq '')) {
+      CertNanny::Logging->error('MSG', "Either CERTFILE <$certfile> or ENTRY <$entry> and ENTRYNAME <$entryname> must be set");
+      return;
+    }
+  }
+
+  # sanity check: Either KEYFILE or ENTRY must be given
+  if ($keyfile eq '') {
+    if (ref($entry) && ($entryname ne '')) {
+      eval {$certfile = File::Spec->catfile($entry->{statedir}, $entryname . "-key.pem");};
+    }
+    if ($@ || ($keyfile eq '')) {
+      CertNanny::Logging->error('MSG', "Either KEYFILE <$keyfile> or ENTRY <$entry> must be set");
+      return;
+    }
+  }
+
+  # sanity check: DIGEST must be one of these: md5, sha1, md2, mdc2, md4
+  if (($digest ne 'md5') && ($digest ne 'sha1') && ($digest ne 'md2') && ($digest ne 'mdc2') && ($digest ne 'md4')) {
+    CertNanny::Logging->error('MSG', "DIGEST <$digest> must be one of these: md5, sha1, md2, mdc2, md4");
+    return;
+  }
+
+  if ($pin eq '') {
+    eval {$pin = $entry->{key}->{pin};};
+    $pin = '' if $@;
+  }
+
+  my $openssl   = $self->{CONFIG}->get('cmd.openssl', 'CMD');
+
+  # split FQDN into individual RDNs. This regex splits at the ','
+  # character if it is not escaped with a \ (negative look-behind)
+  my @RDN = split(/(?<!\\),\s*/, $fqdn);
+
+  my %RDN_Count;
+  foreach (@RDN) {
+    my ($key, $value) = (/(.*?)=(.*)/);
+    $RDN_Count{$key}++;
+  }
+
+  # delete all entries that only showed up once
+  # all other keys now indicate the total number of appearance
+  map {delete $RDN_Count{$_} if ($RDN_Count{$_} == 1);} keys %RDN_Count;
+
+  my $config_options = CertNanny::Util->getDefaultOpenSSLConfig();
+  $config_options->{req} = [];
+  push(@{$config_options->{req}}, {prompt             => "no"});
+  push(@{$config_options->{req}}, {distinguished_name => "req_distinguished_name"});
+
+  $config_options->{req_distinguished_name} = [];
+  foreach (reverse @RDN) {
+    my $rdnstr        = "";
+    my ($key, $value) = (/(.*?)=(.*)/);
+    if (exists $RDN_Count{$key}) {
+      $rdnstr = $RDN_Count{$key} . ".";
+      $RDN_Count{$key}--;
+    }
+
+    $rdnstr .= $key;
+    push(@{$config_options->{req_distinguished_name}}, {$rdnstr => $value});
+  } ## end foreach (reverse @RDN)
+
+  my $tmpconfigfile = CertNanny::Util->writeOpenSSLConfig($config_options);
+  CertNanny::Logging->debug('MSG', "The following configuration was written to $tmpconfigfile:\n" . CertNanny::Util->readFile($tmpconfigfile));
+
+  # generate request
+  my @cmd = (CertNanny::Util->osq("$openssl"), 'req', '-config', CertNanny::Util->osq("$tmpconfigfile"), '-x509', '-new', CertNanny::Util->osq("$digest"), '-out', CertNanny::Util->osq("$certfile"), '-key', CertNanny::Util->osq("$keyfile"),);
+
+  push(@cmd, ('-passin', 'env:PIN')) unless $pin eq "";
+  $ENV{PIN} = $pin;
+  if (CertNanny::Util->runCommand(\@cmd)->{RC} != 0) {
+    CertNanny::Logging->error('MSG', "Selfsign certifcate creation failed!");
+    delete $ENV{PIN};
+    forgetTmpFile('FILE', $tmpconfigfile);
+    return;
+  }
+
+  forgetTmpFile('FILE', $tmpconfigfile);
+
+  return {CERT => $certfile,
+          KEY  => $keyfile};
+} ## end sub createSelfSign
 
 
 sub getCertFormat {

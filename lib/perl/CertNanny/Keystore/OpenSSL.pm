@@ -63,21 +63,20 @@ sub new {
       CertNanny::Logging->debug('MSG', "Rootonly missing TrustedRootCA AUTHORITATIVE Directory");
     }
   } else {
-    if (defined $entry->{INITIALENROLLEMNT} and $entry->{INITIALENROLLEMNT} eq 'yes' ) {
+    if (defined($entry->{initialenroll}->{activ})) {
       CertNanny::Logging->info('MSG', "Initial enrollment mode, skip check for key and cert file");
     } else {
-      #If not an initial enrollment set default to no 
-      $entry->{INITIALENROLLEMNT} =  'no'; 
-   
       # If it's not an Initial Enrollment, we need at least
       #   - keyfile
       #   - location
       if (!defined $entry->{key}->{file} || (!-r $entry->{key}->{file}) && !defined $entry->{hsm}) {
-        return "keystore.key.file $entry->{key}->{file} not defined, does not exist or unreadable";
+        CertNanny::Logging->error('MSG', "keystore.key.file $entry->{key}->{file} not defined, does not exist or unreadable");
+        return;
       }
  
       if (!defined $entry->{location} || (!-r $entry->{location})) {
-        return "keystore.location $entry->{location} not defined, does not exist or unreadable";
+        CertNanny::Logging->error('MSG', "keystore.location $entry->{location} not defined, does not exist or unreadable");
+        return;
       }
     } ## end else [ if (defined $config->...)] 
   
@@ -96,7 +95,8 @@ sub new {
       }
 
       if ($self->{$format} !~ m{ \A (?: DER | PEM ) \z }xms) {
-        return "Incorrect ." . lc($format) . " specification '" . $self->{$format} . "'";
+        CertNanny::Logging->error('MSG', "Incorrect ." . lc($format) . " specification '" . $self->{$format} . "'");
+        return;
       }
     } ## end foreach my $format (qw(FORMAT KEYFORMAT CACERTFORMAT ROOTCACERTFORMAT))
 
@@ -104,7 +104,8 @@ sub new {
     $self->{KEYTYPE} = $entry->{key}->{type} || 'OpenSSL';
 
     if ($self->{KEYTYPE} !~ m{ \A (?: OpenSSL | PKCS8 ) \z }xms) {
-      return "Incorrect keystore type $self->{KEYTYPE}";
+      CertNanny::Logging->error('MSG', "Incorrect keystore type $self->{KEYTYPE}");
+      return;
     }
     $self->{KEYFORMAT} = $entry->{key}->{format} || 'PEM';
     # SANITY CHECKS
@@ -112,12 +113,14 @@ sub new {
     if (defined $self->{PIN} && ($self->{PIN} ne "") &&
                                 ($self->{KEYTYPE} eq 'OpenSSL') &&
                                 ($self->{KEYFORMAT} eq 'DER')) {
-      return "DER encoded OpenSSL keystores cannot be encrypted";
+      CertNanny::Logging->error('MSG', "DER encoded OpenSSL keystores cannot be encrypted");
+      return;
     }
 
     # sanity check: Root CA bundle in DER format does not make sense
     if (($self->{ROOTCACERTFORMAT} eq 'DER') && defined $entry->{rootcacertbundle}) {
-      return "DER encoded Root CA bundles are not supported. Fix .format and/or .rootcacertformat and/or .rootcabundle config settings";
+      CertNanny::Logging->error('MSG', "DER encoded Root CA bundles are not supported. Fix .format and/or .rootcacertformat and/or .rootcabundle config settings");
+      return;
     }
 
     # if we want to use an HSM
@@ -127,22 +130,24 @@ sub new {
       eval "use CertNanny::HSM::$hsmtype";
       if ($@) {
         CertNanny::Logging->Err('STR', join('', $@));
-        return undef;
+        return;
       }
       eval "\$self->{HSM} = CertNanny::HSM::$hsmtype->new(\$entry, \$config, \$entryname)";
       if ($@ or not $self->{HSM}) {
         CertNanny::Logging->error('MSG', "Could not instantiate HSM: " . $@);
-        return undef;
+        return;
       }
 
       my $hsm = $self->{HSM};
       unless ($hsm->can('createRequest') and $hsm->can('genkey')) {
         unless ($hsm->can('engineid')) {
-          return "HSM does not provide function engineid(), can not continue.";
+          CertNanny::Logging->error('MSG', "HSM does not provide function engineid(), can not continue.");
+          return;
         }
 
         unless ($hsm->can('keyform')) {
-          return "HSM does not provide function keyform(), can not continue.";
+          CertNanny::Logging->error('MSG', "HSM does not provide function keyform(), can not continue.");
+          return;
         }
       }
     } ## end if ($entry->{hsm}->{type})
@@ -159,9 +164,9 @@ sub new {
 
     # RETRIEVE AND STORE STATE
     # get previous renewal status
-    return if !defined($self->k_retrieveState());
+    return 0 if !defined($self->k_retrieveState());
     # check if we can write to the file
-    return if !defined($self->k_storeState());
+    return 0 if !defined($self->k_storeState());
     
   } #location root only 
   # return new keystore object
@@ -608,8 +613,7 @@ sub createRequest {
 
   my $result = undef;
 
-  if (defined  $entry->{INITIALENROLLEMNT} and 
- 	  $entry->{INITIALENROLLEMNT} eq 'yes' and 
+  if (defined($entry->{initialenroll}->{activ}) and 
  	  ($entry->{initialenroll}->{auth}->{mode} eq 'password' or $entry->{initialenroll}->{auth}->{mode} eq 'anonymous')) {
     $result = {KEYFILE => File::Spec->catfile($entry->{statedir}, $entryname . "-key.pem")};
     CertNanny::Logging->debug('MSG', "Skip key generation in initialenrollment its already generated for selfsign certificate");
@@ -639,7 +643,7 @@ sub createRequest {
 
     my $DN;
     #for inital enrollment we override the DN to use the configured desiered DN rather then the preset enrollment certificates DN
-    if ($entry->{INITIALENROLLEMNT} eq 'yes') {
+    if (defined($entry->{initialenroll}->{activ})) {
      # $DN = $entry->{initialenroll}->{subject};
       $DN = $config->get("keystore.$entryname.initialenroll.subject");
     } else {
@@ -668,7 +672,7 @@ sub createRequest {
 
     # handle subject alt names from inital configuration information
     my $newsans = '';
-    if ($entry->{INITIALENROLLEMNT} eq 'yes') {
+    if (defined($entry->{initialenroll}->{activ})) {
       CertNanny::Logging->debug('MSG', "Add SANs for initial enrollment");
       if (exists $entry->{initialenroll}->{san}) {
         push(@{$config_options->{req}}, {req_extensions => "v3_ext"});
@@ -709,7 +713,7 @@ sub createRequest {
       push(@{$config_options->{v3_ext}}, {subjectAltName => $san});
     }
 
-    if ($entry->{INITIALENROLLEMNT} eq 'yes') {
+    if (defined($entry->{initialenroll}->{activ})) {
       CertNanny::Logging->debug('MSG', "Enter initial enrollment section");
 
       if (exists $entry->{initialenroll}->{profile} && $entry->{initialenroll}->{profile} ne '') {
@@ -722,8 +726,7 @@ sub createRequest {
         push(@{$config_options->{req}},            {attributes          => "req_attributes"});
         push(@{$config_options->{req_attributes}}, {'challengePassword' => $entry->{initialenroll}->{auth}->{challengepassword}});
       }
-
-    } ## end if ($entry->{INITIALENROLLEMNT...})
+    }
 
     my @engine_cmd;
     if ($self->_hasEngine()) {
@@ -766,105 +769,6 @@ sub createRequest {
 
   return $result;
 } ## end sub createRequest
-
-
-sub selfSign {
-  ###########################################################################
-  #
-  # sign the ceritifate
-  # 
-  # Input: -
-  # 
-  # Output: caller gets a hash ref:
-  #           CERT => file containing the signed certificate
-  # 
-  # This signs the current certifiate
-  # This method should selfsign the current certificate.
-  #
-  # You may want to inherit this class from CertNanny::Keystore::OpenSSL if
-  # you wish to generate the private key 'outside' of your keystore and 
-  # import this information later.
-  # In this case use the following code:
-  # sub selfSign {
-  #   my $self = shift;
-  #   return $self->SUPER::selfSign(@_) if $self->can("SUPER::selfSign");
-  # }
-  #
-  # If you are able to directly operate on your keystore to generate keys
-  # and requests, you might choose to do all this yourself here:
-  my $self = shift;
-
-  my $options   = $self->{OPTIONS};
-  my $entry     = $options->{ENTRY};
-  my $entryname = $options->{ENTRYNAME};
-  my $config    = $options->{CONFIG};
-
-  my $openssl      = $config->get('cmd.openssl', 'CMD');
-  my $selfsigncert = $entryname . "-selfcert.pem";
-  my $outfile      = File::Spec->catfile($entry->{statedir}, $selfsigncert);
-  my $pin          = $self->{PIN} || $entry->{key}->{pin} || "";
-
-  ######prepere openssl config file##########
-
-  my $DN;
-  #for inital enrollment we override the DN to use the configured desiered DN rather then the preset enrollment certificates DN
-  if ($entry->{INITIALENROLLEMNT} eq 'yes') {
-    $DN = $entry->{initialenroll}->{subject};
-  } else {
-    $DN = Net::Domain::hostfqdn();
-  }
-  CertNanny::Logging->debug('MSG', "DN: $DN");
-
-  # split DN into individual RDNs. This regex splits at the ','
-  # character if it is not escaped with a \ (negative look-behind)
-  my @RDN = split(/(?<!\\),\s*/, $DN);
-
-  my %RDN_Count;
-  foreach (@RDN) {
-    my ($key, $value) = (/(.*?)=(.*)/);
-    $RDN_Count{$key}++;
-  }
-
-  # delete all entries that only showed up once
-  # all other keys now indicate the total number of appearance
-  map {delete $RDN_Count{$_} if ($RDN_Count{$_} == 1);} keys %RDN_Count;
-
-  my $config_options = CertNanny::Util->getDefaultOpenSSLConfig();
-  $config_options->{req} = [];
-  push(@{$config_options->{req}}, {prompt             => "no"});
-  push(@{$config_options->{req}}, {distinguished_name => "req_distinguished_name"});
-
-  $config_options->{req_distinguished_name} = [];
-  foreach (reverse @RDN) {
-    my $rdnstr        = "";
-    my ($key, $value) = (/(.*?)=(.*)/);
-    if (exists $RDN_Count{$key}) {
-      $rdnstr = $RDN_Count{$key} . ".";
-      $RDN_Count{$key}--;
-    }
-
-    $rdnstr .= $key;
-    push(@{$config_options->{req_distinguished_name}}, {$rdnstr => $value});
-  } ## end foreach (reverse @RDN)
-
-  my $tmpconfigfile = CertNanny::Util->writeOpenSSLConfig($config_options);
-  CertNanny::Logging->debug('MSG', "The following configuration was written to $tmpconfigfile:\n" . CertNanny::Util->readFile($tmpconfigfile));
-
-  # generate request
-  my @cmd = (CertNanny::Util->osq("$openssl"), 'req', '-config', CertNanny::Util->osq("$tmpconfigfile"), '-x509', '-new', '-sha1', '-out', CertNanny::Util->osq("$outfile"), '-key', CertNanny::Util->osq("$entry->{key}->{file}"),);
-
-  push(@cmd, ('-passin', 'env:PIN')) unless $pin eq "";
-  $ENV{PIN} = $pin;
-  if (CertNanny::Util->runCommand(\@cmd)->{RC} != 0) {
-    CertNanny::Logging->error('MSG', "Selfsign certifcate creation failed!");
-    delete $ENV{PIN};
-  }
-
-  #    openssl req -x509 -days 365 -new -out self-signed-certificate.pem
-  #	-key pub-sec-key.pem
-
-  return {CERT => $outfile};
-} ## end sub selfSign
 
 
 sub _hasEngine {
