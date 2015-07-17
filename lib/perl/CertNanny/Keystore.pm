@@ -32,6 +32,11 @@ use vars qw($VERSION);
 use Exporter;
 
 sub new {
+  # Input: -
+  # 
+  # Output: undef : error
+  #             0 : no keystore instantiated
+  #           ref : keystore instantiated
   # constructor parameters:
   # location - base name of keystore (required)
   my $proto = shift;
@@ -51,23 +56,44 @@ sub new {
   #  $self->{UTIL}    = CertNanny::Util->getInstance(CONFIG => $self->{CONFIG});
   #  $self->{LOGGING} = CertNanny::Logging->getInstance(CONFIG => $self->{CONFIG}); 
   #
+
   # sanity check keystore config parameters
+  # critical errors: no other keystore can be instantiated -> exit
+  $self->{OPTIONS}->{'path.tmpdir'}  = $config->get('path.tmpdir', 'FILE');
+  $self->{OPTIONS}->{'cmd.openssl'}  = $config->get('cmd.openssl', 'CMD');
+  $self->{OPTIONS}->{'cmd.sscep'}    = $config->get('cmd.sscep',   'CMD');
+  $self->{OPTIONS}->{ENTRYNAME}      = $entryname;
+
+  CertNanny::Util->Exit('RC', '1', 'ERR', "No tmp directory specified")            if ! defined($self->{OPTIONS}->{'path.tmpdir'});
+  CertNanny::Util->Exit('RC', '1', 'ERR', "No openssl binary configured or found") if ! defined($self->{OPTIONS}->{'cmd.openssl'});
+  CertNanny::Util->Exit('RC', '1', 'ERR', "No sscep binary configured or found")   if ! defined($self->{OPTIONS}->{'cmd.sscep'});
+
+  # noncritical errors: no other keystore can maybe be instantiated -> skip this one
   # keystore must be available
   my $type = $entry->{type};
   if (!defined $type || ($type eq "none")) {
-    CertNanny::Logging->Err('STR', "Skipping keystore (no keystore type defined)\n");
-    return;
+    CertNanny::Logging->error('MSG', "No keystore type defined.");
+    return 0;
   }
   
   # CertNanny::Logging->debug('MSG', "Keystore args dump:". Dumper( $entry ));
  
-  # statedir and scepcertdir must exist and be writeable
+  # Keystore specific statedir and scepcertdir must exist and be writeable
   foreach my $item (qw(statedir scepcertdir)) {
-    if (!exists $entry->{$item}) {return "No $item specified for keystore " . $entry->{location};}
-    if (!-d $entry->{$item})     {return "$item directory $entry->{$item} does not exist";}
+    if (!exists $entry->{$item}) {
+      CertNanny::Logging->error('MSG', "No $item specified.");
+      return 0;
+    }
+    if (!-d $entry->{$item})     {
+      CertNanny::Logging->error('MSG', "$item directory $entry->{$item} does not exist.");
+      return 0;
+    }
     if (!-x $entry->{$item} or
         !-r $entry->{$item} or
-        !-w $entry->{$item})  {return "Insufficient permissions for $item $entry->{$item}";}
+        !-w $entry->{$item})     {
+      CertNanny::Logging->error('MSG', "Insufficient permissions for $item $entry->{$item}.");
+      return 0;
+    }
   } ## end foreach my $item (qw(statedir scepcertdir))
 
   # if there is no statefile defined, create one
@@ -77,24 +103,12 @@ sub new {
     $entry->{statefile} = $statefile;
   }
 
-  # set defaults
-  # $self->{CONFIG} = $config;
-  
-  $self->{OPTIONS}->{'path.tmpdir'}  = $config->get('path.tmpdir', 'FILE');
-  $self->{OPTIONS}->{'cmd.openssl'}  = $config->get('cmd.openssl', 'CMD');
-  $self->{OPTIONS}->{'cmd.sscep'}    = $config->get('cmd.sscep',   'CMD');
-  $self->{OPTIONS}->{ENTRYNAME}      = $entryname;
-
-  return "No tmp directory specified"            if ! defined($self->{OPTIONS}->{'path.tmpdir'});
-  return "No openssl binary configured or found" if ! defined($self->{OPTIONS}->{'cmd.openssl'});
-  return "No sscep binary configured or found"   if ! defined($self->{OPTIONS}->{'cmd.sscep'});
-
   # dynamically load keystore instance module
   eval "require CertNanny::Keystore::${type}";
   if ($@) {
-    CertNanny::Logging->Err('STR', , join('', $@));
-    CertNanny::Logging->Err('STR', "ERROR: Could not load keystore handler <$type>\n");
-    return;
+    CertNanny::Logging->error('MSG', , join('', $@));
+    CertNanny::Logging->error('MSG', "Could not load keystore handler <$type>");
+    return 0;
   }
 
   # attach keystore handler
@@ -102,19 +116,18 @@ sub new {
   # configuration and return undef if options are not appropriate
   eval "\$self->{INSTANCE} = new CertNanny::Keystore::$type((\%args,                   # give it whole configuration plus all keystore parameters and keystore name from configfile
                                                              \%{\$self->{OPTIONS}}))"; # give it some common parameters from configfile
-  if (! ref($self->{INSTANCE})) {
-    CertNanny::Logging->Err('STR', "Could not initialize keystore handler '$type' for keystore '$self->{OPTIONS}->{ENTRYNAME}': $self->{INSTANCE}\n");
+  if (!ref($self->{INSTANCE})) {
+    CertNanny::Logging->error('MSG', "Could not initialize keystore handler '$type' for keystore '$self->{OPTIONS}->{ENTRYNAME}': $self->{INSTANCE}");
     return;
   }
 
-  # get certificate
-  if (defined $self->{INSTANCE}->{OPTIONS}->{ENTRY}->{INITIALENROLLEMNT}
-      and $self->{INSTANCE}->{OPTIONS}->{ENTRY}->{INITIALENROLLEMNT} eq 'yes') {
-    CertNanny::Logging->debug('MSG', "Initialenrollment keystore that has no certificate to read yet.");
+  if (defined($entry->{initialenroll}->{activ})) {
+    CertNanny::Logging->debug('MSG', "Initialenrollment activ: Keystore that has no certificate to read yet.");
   } else {
-    if ($self->{INSTANCE}->{OPTIONS}->{ENTRY}->{location} eq "rootonly") {
-       CertNanny::Logging->debug('MSG', "rootonly keystore that has no certificate to read.");
+    if ($entry->{location} eq "rootonly") {
+       CertNanny::Logging->debug('MSG', "Rootonly keystore: No certificate to read.");
     } else {
+      # get certificate
       $self->{CERT} = $self->{INSTANCE}->getCert();
   
       if (defined($self->{CERT}) && defined($self->{CERT}->{CERTINFO} = CertNanny::Util->getCertInfoHash(%{$self->{CERT}}))) {
@@ -124,38 +137,25 @@ sub new {
         CertNanny::Logging->debug('MSG', "                         valid from:  <" . $self->{CERT}->{CERTINFO}->{NotBefore} . ">");
         CertNanny::Logging->debug('MSG', "                         valid until: <" . $self->{CERT}->{CERTINFO}->{NotAfter} . ">");
   
-        my $output;
         my %convopts = %{$self->{CERT}};
-        $convopts{OUTFORMAT}        = 'PEM';
-        $output = CertNanny::Util->convertCert(%convopts);
-        if ($output) {
-          $self->{CERT}->{RAW}->{PEM} = $output->{CERTDATA};
-        } else {
-          $self->{CERT}->{RAW}->{PEM} = undef;
+        foreach ('PEM', 'DER') {
+          $convopts{OUTFORMAT} = $_;
+          $self->{CERT}->{RAW}->{$_} = undef;
+          if (my $output = CertNanny::Util->convertCert(%convopts)) {
+            $self->{CERT}->{RAW}->{$_} = $output->{CERTDATA};
+          }
         }
-        # $self->k_convertCert(%convopts)->{CERTDATA};
-        $convopts{OUTFORMAT}        = 'DER';
-        $output = CertNanny::Util->convertCert(%convopts);
-        if ($output) {
-          $self->{CERT}->{RAW}->{DER} = $output->{CERTDATA};
-        } else {
-          $self->{CERT}->{RAW}->{DER} = undef;
-        }
-        # $self->k_convertCert(%convopts)->{CERTDATA};
       } else {
         CertNanny::Logging->error('MSG', "Could not parse instance certificate");
-        return;
+        return 0;
       }
       $self->{INSTANCE}->k_setCert($self->{CERT});
-    } ## end else [ if (defined $self->{INSTANCE...})]
-  
-    # get previous renewal status
-    $self->k_retrieveState() or return;
-  
-    # check if we can write to the file
-    if (my $storeErrState = $self->k_storeState()) {
-      return $storeErrState;
     }
+
+    # get previous renewal status
+    return 0 if !defined($self->k_retrieveState());
+    # check if we can write to the file
+    return 0 if !defined($self->k_storeState());
   }
   
   return $self;
@@ -181,7 +181,6 @@ sub dummy () {
 #      - installCert
 #      - getKey
 #      - createRequest
-#      - selfSign
 #      - generateKey
 #      - createpkcs12
 #      - importP12
@@ -272,34 +271,6 @@ sub dummy () {
 #  #
 #  # If you are able to directly operate on your keystore to generate keys
 #  # and requests, you might choose to do all this yourself here:
-#}
-
-
-#sub selfSign {
-#  ###########################################################################
-#  #
-#  # sign the ceritifate
-#  # 
-#  # Input: -
-#  # 
-#  # Output: caller gets a hash ref:
-#  #           CERT => file containing the signed certificate
-#  # 
-#  # This signs the current certifiate
-#  # This method should selfsign the current certificate.
-#  #
-#  # You may want to inherit this class from CertNanny::Keystore::OpenSSL if
-#  # you wish to generate the private key and PKCS#10 request 'outside' of
-#  # your keystore and import this information later.
-#  # In this case use the following code:
-#  # sub selfSign {
-#  #   my $self = shift;
-#  #   return $self->SUPER::selfSign(@_) if $self->can("SUPER::selfSign");
-#  # }
-#  #
-#  # If you are able to directly operate on your keystore to generate keys
-#  # and requests, you might choose to do all this yourself here:
-#  return undef;
 #}
 
 
@@ -503,6 +474,11 @@ sub dummy () {
 
 
 sub k_storeState {
+  # Input: onError 0 : Precedure was called during normal processing (Default)
+  #                1 : Procedure was called during DESTROY processing
+  # 
+  # Output: undef : error
+  #             1 : success 
 
   # store last state to statefile if it is defined
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " stored CertNanny state");
@@ -529,7 +505,9 @@ sub k_storeState {
 
       my $fh;
       if (!open $fh, '>', $tmpFile) {
-        return "Error writing Keystore state ($file). Could not write state to tmp. file $tmpFile";
+        CertNanny::Logging->error('MSG', "Error writing Keystore state <$file>. Could not write state to tmp. file <$tmpFile>");
+        # return "Error writing Keystore state ($file). Could not write state to tmp. file $tmpFile";
+        return;
       }
       print $fh $dump->Dump;
       close $fh;
@@ -542,33 +520,40 @@ sub k_storeState {
             CertNanny::Logging->debug('MSG', "Wiping backupfile <$bakFile>.");
             CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);
           } else {
-            CertNanny::Logging->debug('MSG', "Error moving <$tmpFile> to <$file>. Rollback.");
+            CertNanny::Logging->error('MSG', "Error moving keystore tmp. state file <$tmpFile> to <$file>. Rollback.");
             File::Copy::move($bakFile, $file);
             CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);
-            return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
+            # return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
+            return;
           }
         } else {
-          CertNanny::Logging->debug('MSG', "Error creating backup <$bakFile> of state file <$file>");
+          CertNanny::Logging->error('MSG', "Error creating backup <$bakFile> of state file <$file>");
           CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);
-          return "Error creating backup <$bakFile> of state file <$file>";
+          # return "Error creating backup <$bakFile> of state file <$file>";
+          return;
         }
       } else {
         CertNanny::Logging->debug('MSG', "Statefile <$file> does not exists. No backup needed.");
         if (!File::Copy::move($tmpFile, $file)) {
-          CertNanny::Logging->debug('MSG', "Error moving keystore tmp. state file <$tmpFile> to <$file>");
+          CertNanny::Logging->error('MSG', "Error moving keystore tmp. state file <$tmpFile> to <$file>");
           CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);
-          return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
+          # return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
+          return;
         }
       }
     } ## end if (ref $self->{STATE}...)
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " stored CertNanny state");
-  return 0;
+  return 1;
 } ## end sub k_storeState
 
 
 sub k_retrieveState {
+  # Input: -
+  # 
+  # Output: undef : error
+  #             1 : success 
 
   # retrieve last state from statefile if it exists
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " retrieve stored CertNanny state");
@@ -582,11 +567,15 @@ sub k_retrieveState {
 
       my $fh;
       if (!open $fh, '<', $file) {
+        CertNanny::Logging->debug('MSG', "Could not read state file <$file>.");
+        return;
         croak "Could not read state file $file";
       }
       eval do {local $/; <$fh>};
 
       if (!defined $self->{STATE}->{DATA}) {
+        CertNanny::Logging->debug('MSG', "Could not read state from state file <$file>.");
+        return;
         croak "Could not read state from file $file";
       }
     } ## end if (-r $file)
@@ -601,9 +590,14 @@ sub k_retrieveState {
 
 
 sub k_checkclearState {
+  # Input: $forceClear 0 : Normal processing (Default)
+  #                    1 : Forces state clearing
+  # 
+  # Output: undef : error
+  #             1 : success 
 
   # checks the number of unsucessfull state operations
-  # if necessary clear statefile and retrieve empty state
+  # if necessary or foreced clear statefile and retrieve empty state
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " check and if necessary, clear CertNanny state");
   my $self = shift;
   my $forceClear = shift || 0;
@@ -867,11 +861,8 @@ WRITEFILES:
     my $file       = $entry->{DSTFILE};
     my $backupfile = $file . ".backup";
 
-    # remove already existing backup file
-    if (-e $backupfile) {CertNanny::Util->wipe(FILE => $backupfile, SECURE => 1)}
-
-    # check if it still persists
-    if (-e $backupfile) {
+    # remove already existing backup file and complain on error
+    if (!defined(CertNanny::Util->wipe(FILE => $backupfile, SECURE => 1))) {
       CertNanny::Logging->error('MSG', "k_saveInstallFile(): could not wipe out backup file $backupfile");
       # clean up and bail out
       # undo rename operations
@@ -2029,9 +2020,9 @@ sub _sendRequest_initialEnrollment {
   CertNanny::Logging->debug('MSG', "Install cert in initial enrollment.");
 
   my $keystore     = $config->{CONFIG}->{keystore}->{$entryname};
-  my $keystoretype = $entry->{initialenroll}->{targetType};
-  $entry->{location}                     = $keystore->{location};
-  $entry->{initialenroll}->{targetPIN} ||= $keystore->{key}->{pin};
+  my $keystoretype = $entry->{initialenroll}->{target}->{type};
+  $entry->{location}                         = $keystore->{location};
+  $entry->{initialenroll}->{target}->{pin} ||= $keystore->{key}->{pin};
 
   my @cachain;
   push(@cachain, @{$self->{STATE}->{DATA}->{ROOTCACERTS}});
@@ -2048,7 +2039,7 @@ sub _sendRequest_initialEnrollment {
                                                   KEYFILE      => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{KEYFILE},
                                                   CERTFORMAT   => 'PEM',
                                                   CERTFILE     => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE},
-                                                  EXPORTPIN    => $entry->{initialenroll}->{targetPIN},
+                                                  EXPORTPIN    => $entry->{initialenroll}->{target}->{pin},
                                                   PIN          => $keystore->{key}->{pin}))) {
     $p12File = $exportp12->{FILENAME};
     CertNanny::Logging->debug('MSG', "Created importp12 file <$exportp12->{FILENAME}> for target keystore type: $keystoretype");
@@ -2068,7 +2059,7 @@ sub _sendRequest_initialEnrollment {
 
   CertNanny::Logging->debug('MSG', "Importing p12 <$p12File> into the final location.");
   eval "CertNanny::Keystore::${keystoretype}::importP12(FILENAME  => $p12File,
-                                                        PIN       => $entry->{initialenroll}->{targetPIN},
+                                                        PIN       => $entry->{initialenroll}->{target}->{pin},
                                                         ENTRYNAME => $entryname,
                                                         ENTRY     => $entry,
                                                         CONF      => $config)";
@@ -2146,7 +2137,7 @@ sub _sendRequest {
       if (defined($self->{STATE}->{DATA}->{CERTCHAIN} = $self->k_buildCertificateChain($newcert))) {
         $self->k_executeHook($entry->{hook}->{renewal}->{install}->{pre});
 
-        if (exists $entry->{INITIALENROLLEMNT} and $entry->{INITIALENROLLEMNT} eq 'yes') {
+        if (defined($entry->{initialenroll}->{activ})) {
           $rc = self->_sendRequest_initialEnrollment();
         } else {
           $rc = $self->installCert(CERTFILE   => $newcertfile,
