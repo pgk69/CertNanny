@@ -96,7 +96,7 @@ sub unsetVariable {
   my $self    = (shift)->getInstance();
   my %args   = (NAME  => '',
                 @_);
-  eval(undef($variable{$args{'NAME'}})) if ($args{'NAME'} ne '');
+  delete $variable{$args{'NAME'}} if ($args{'NAME'} ne '');
   return 1;
 }
 
