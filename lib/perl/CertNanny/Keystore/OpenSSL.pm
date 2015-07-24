@@ -683,10 +683,15 @@ sub createRequest {
       SANS:
         foreach my $key (keys %{$entry->{initialenroll}->{san}}) {
           next SANS if ($key eq 'INHERIT');
-          $newsans .= $entry->{initialenroll}->{san}->{$key} . ',';
+          my $newsan = $entry->{initialenroll}->{san}->{$key};
+          if ($newsan =~ /^DNS:/) {
+            $newsans .= $entry->{initialenroll}->{san}->{$key} . ', ';
+          } else {
+            $newsans .= 'DNS:' . $entry->{initialenroll}->{san}->{$key} . ', ';
+          }
         }
         ##write inittal enrollment SANs into the cert information without last ','
-        $self->{CERT}->{CERTINFO}->{SubjectAlternativeName} = substr($newsans, 0, -1);
+        $self->{CERT}->{CERTINFO}->{SubjectAlternativeName} = substr($newsans, 0, -2);
       } ## end if (exists $self->{OPTIONS...})
 
     } else {
