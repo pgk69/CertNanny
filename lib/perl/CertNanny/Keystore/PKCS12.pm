@@ -678,6 +678,7 @@ sub syncRootCAs {
   return $self->SUPER::syncRootCAs(@_) if $self->can("SUPER::syncRootCAs");
 }
 
+
 sub getCertLocation {
   ###########################################################################
   #
@@ -725,8 +726,6 @@ CertNanny::Logging->debug('MSG', "Root CA locations for $entryname". Dumper($rc)
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get the key specific locations for certificates");
   return $rc
 } ## end sub getKey
-
-
 
 
 sub _buildOpenSSLPKCS12Cmd {
