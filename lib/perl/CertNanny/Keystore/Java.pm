@@ -69,12 +69,12 @@ sub new {
   return "keystore.$entryname.location not defined" if ! (defined $entry->{location});
   return "keystore file $entry->{location} not readable" if (!-r $entry->{location});
   
-#  if (!$config->get("keystore.$entryname.TrustedRootCA.GENERATED.Directory")) {
+#  if (!CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{Directory}, 'FILE')) {
 #    # TrustedRootCA.GENERATED.Directory must be definied in order for k_syncRootCAs to work. For Java it is identical top location
 #    $config->set("keystore.$entryname.TrustedRootCA.GENERATED.Directory", $entry->{location});
 #  }
 
-  if (!$config->get("keystore.$entryname.TrustedRootCA.GENERATED.Location")) {
+  if (!CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{Location}, 'FILE')) {
     # TrustedRootCA.GENERATED.Location must be definied in order for k_syncRootCAs to work. For Java it is identical top location
     $config->set("keystore.$entryname.TrustedRootCA.GENERATED.Location", $entry->{location});
   }
@@ -456,17 +456,17 @@ sub getCertLocation {
 
   if ($args{TYPE}  eq 'TrustedRootCA') {
     foreach ('Directory', 'File', 'ChainFile') {
-      if (my $location = $config->get("keystore.$entryname.TrustedRootCA.GENERATED.$_", 'FILE')) {
+      if (my $location = CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{$_}, 'FILE')) {
         $rc->{lc($_)} = $location;
       }
     }
-    if (my $location = $config->get("keystore.$entryname.location", 'FILE')) {
+    if (my $location = CertNanny::Util->mangle($entry->{location}, 'FILE')) {
       $rc->{location} = $location;
     }
   }
   if ($args{CAChain}) {
     foreach ('Directory', 'File') {
-      if (my $location = $config->get("keystore.$entryname.CAChain.GENERATED.$_", 'FILE')) {
+      if (my $location = CertNanny::Util->mangle($entry->{CAChain}->{GENERATED}->{Directory}, 'FILE')) {
         $rc->{lc($_)} = $location;
       }
     }
@@ -762,7 +762,7 @@ sub getInstalledCAs {
   my $rc = {};
   
   if (!defined($args{TARGET}) or ($args{TARGET} eq 'LOCATION')) {
-    if (defined(my $locName = $config->get("keystore.$entryname.location", 'FILE'))) {
+    if (defined(my $locName = CertNanny::Util->mangle($entry->{location}, 'FILE'))) {
       my ($certRef, @certList, $certData, $certSha1, $certAlias, $certCreateDate, $certType, $certFingerprint);
       my @cmd = $self->_buildKeytoolCmd($locName, '-list');
       @certList = @{CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{STDOUT}};

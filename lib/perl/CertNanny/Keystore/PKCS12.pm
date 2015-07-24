@@ -55,7 +55,7 @@ sub new {
   }
 
   # export the pin to this instance
-  $self->{PIN} = $config->get("keystore.$entryname.key.pin");
+  $self->{PIN} = $entry->{key}->{pin};
 
   # sample sanity checks for configuration settings
   foreach my $parameter (qw(location)) {
@@ -127,7 +127,7 @@ sub getCert {
   my $rc = undef;
 
   if (!defined $args{CERTFILE} && !defined $args{CERTDATA}) {
-    $args{CERTFILE} = $config->get("keystore.$entryname.location", 'FILE')
+    $args{CERTFILE} = CertNanny::Util->mangle($entry->{location}, 'FILE')
   }
   
   if (defined $args{CERTFILE} && defined $args{CERTDATA}) {
@@ -463,7 +463,7 @@ sub getInstalledCAs {
 
   # get root certs from LOCATION
   my ($certRef, $certData, $certSha1);
-  $certRef = $self->getCert(CERTFILE => $config->get("keystore.$entryname.location", 'FILE'),
+  $certRef = $self->getCert(CERTFILE => CertNanny::Util->mangle($entry->{location}, 'FILE'),
                             CERTTYPE => 'CA');
   while ($certRef and ($certData = $certRef->{CERTDATA})) {
     my $certInfo = CertNanny::Util->getCertInfoHash(CERTDATA   => $certData,
@@ -471,7 +471,7 @@ sub getInstalledCAs {
     if (defined($certInfo)) {
       if (my $certTyp = $self->k_getCertType(CERTINFO => $certInfo)) {
         $certSha1 = CertNanny::Util->getCertSHA1(%{$certRef});
-        $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTFILE} = $config->get("keystore.$entryname.location", 'FILE');
+        $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTFILE} = CertNanny::Util->mangle($entry->{location}, 'FILE');
         $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTDATA} = $certData;
         $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTINFO} = $certInfo;
         if ($certTyp eq 'installedRootCAs') {
@@ -533,18 +533,18 @@ sub installRoots {
     my $installedRootCAs = $self->k_getAvailableRootCAs();
 
     if (!defined($installedRootCAs)) {
-      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . CertNanny::Util->mangle($entry->{TrustedRootCA}->{AUTHORITATIVE}->{Directory}, 'FILE'));
     } else {
       # If this is ok, let's get the privat key
       my $myKey = $self->getKey();
       my $EECert;
       if (!defined($myKey)) {
-        $rc = !CertNanny::Logging->error('MSG', "No private key found in " . $config->get("keystore.$entryname.location", 'FILE'));
+        $rc = !CertNanny::Logging->error('MSG', "No private key found in " . CertNanny::Util->mangle($entry->{location}, 'FILE'));
       } else {
         # now let's get the certificate
         $EECert = $self->getCert(CERTTYPE => 'EE');
         if (!defined($EECert)) {
-          $rc = !CertNanny::Logging->error('MSG', "No EE cert found in " . $config->get("keystore.$entryname.location", 'FILE'));
+          $rc = !CertNanny::Logging->error('MSG', "No EE cert found in " . CertNanny::Util->mangle($entry->{location}, 'FILE'));
         } else {
           $EECert->{CERTINFO} = CertNanny::Util->getCertInfoHash(CERTDATA   => $EECert->{CERTDATA},
                                                                  CERTFORMAT => 'PEM');
@@ -612,23 +612,23 @@ sub installRoots {
                                                       '-in'     => '"'.$tmpCert.'"',     
                                                       '-out'    => '"'.$tmpP12.'"',
                                                       '-inkey'  => '"'.$tmpKey.'"',
-                                                      '-name'   => $config->get("keystore.$entryname.label") || 'cert1',
+                                                      '-name'   => $entry->{label} || 'cert1',
                                                       'ARGS'    => \@CAList);
               $rc = CertNanny::Util->runCommand(\@cmd)->{RC};
 
               if (!$rc) {
-               CertNanny::Logging->debug('MSG', "install params tmpfile:" .$tmpP12 ." dest file: " .  $config->get("keystore.$entryname.location", 'FILE')  );
+               CertNanny::Logging->debug('MSG', "install params tmpfile:" .$tmpP12 ." dest file: " .  CertNanny::Util->mangle($entry->{location}, 'FILE'));
                 # Everything ok. Let's replace the old PKCS12
                 $rc = !$self->k_saveInstallFile({SRCFILE     => $tmpP12,
-                                                 DSTFILE     => $config->get("keystore.$entryname.location", 'FILE'),
+                                                 DSTFILE     => CertNanny::Util->mangle($entry->{location}, 'FILE'),
                                                  DESCRIPTION => 'PKCS12 keystore replacement'});
                 if ($rc) {
                   CertNanny::Logging->error('MSG', "Could not install new keystore");
                 } else {
                   $self->{hook}->{Type}   .= 'LOCATION' . ',';
-                  $self->{hook}->{File}   .= $config->get("keystore.$entryname.location") . ',';
+                  $self->{hook}->{File}   .= CertNanny::Util->mangle($entry->{location}, 'FILE') . ',';
                   $self->{hook}->{FP}     .= '-' . ',';
-                  $self->{hook}->{Target} .= $config->get("keystore.$entryname.location") . ',';
+                  $self->{hook}->{Target} .= CertNanny::Util->mangle($entry->{location}, 'FILE') . ',';
                 }
               }
             }
@@ -705,19 +705,19 @@ sub getCertLocation {
 
   if ($args{TYPE}  eq 'TrustedRootCA') {
     foreach ('Directory', 'File', 'ChainFile') {
-      if (my $location = $config->get("keystore.$entryname.TrustedRootCA.GENERATED.$_", 'FILE')) {
+      if (my $location = CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{$_}, 'FILE')) {
        CertNanny::Logging->debug('MSG', 'getCertLocation(): found location: '. $_);
         $rc->{lc($_)} = $location;
       }
     }
-    if (my $location = $config->get("keystore.$entryname.location", 'FILE')) {
+    if (my $location = CertNanny::Util->mangle($entry->{location}, 'FILE')) {
      CertNanny::Logging->debug('MSG', 'getCertLocation(): found location: '. $location);
       $rc->{location} = $location;
     }
   }
   if ($args{CAChain}) {
     foreach ('Directory', 'File') {
-      if (my $location = $config->get("keystore.$entryname.CAChain.GENERATED.$_", 'FILE')) {
+      if (my $location = CertNanny::Util->mangle($entry->{CAChain}->{GENERATED}->{$_}, 'FILE')) {
         $rc->{lc($_)} = $location;
       }
     }
@@ -751,7 +751,7 @@ sub _buildOpenSSLPKCS12Cmd {
   my $rc = 0;
   
   my $openssl    = $config->get('cmd.openssl', 'CMD');
-  $args{-in}       ||= '"'.$config->get("keystore.$entryname.location", 'FILE').'"';
+  $args{-in}       ||= '"'.CertNanny::Util->mangle($entry->{location}, 'FILE').'"';
   $ENV{PASSWORD} = $args{-password} || $self->_getPin();
   $ENV{PASSOUT}  = $args{-passout}  || $self->_getPin();
   $ENV{PASSIN}   = $args{-passin}   || $self->_getPin();

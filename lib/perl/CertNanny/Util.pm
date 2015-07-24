@@ -33,7 +33,7 @@ use Data::Dumper;
 use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION);
 use Exporter;
 
-@EXPORT = qw(runCommand isoDateToEpoch epochToIsoDate expandStr 
+@EXPORT = qw(runCommand isoDateToEpoch epochToIsoDate expandStr mangle
              printableIsoDate readFile writeFile createSelfSign getCertSHA1
              getCertFormat getCertInfoHash getCSRInfoHash parseCertData 
              getTmpFile forgetTmpFile wipe staticEngine encodeBMPString writeOpenSSLConfig 
@@ -128,6 +128,30 @@ sub osq {
      $command = "'$str'";
    }
   return $command;
+}
+
+
+sub mangle {
+  my $self = (shift)->getInstance();
+  my %args = (VALUE  => undef,
+              MANGLE => 'PLAIN',
+              @_);
+              
+  my $value  = $args{VALUE};
+  my $mangle = $args{MANGLE};
+  
+  return if !defined $value;
+
+  if ($value ne '') {
+    # mangle only if value is not "", otherwise File::Spec converts "" into "\", which doesn't make much sense ...
+    return File::Spec->catfile(File::Spec->canonpath($value)) if ($mangle eq "FILE");
+    return uc($value)                                         if ($mangle eq "UC");
+    return lc($value)                                         if ($mangle eq "LC");
+    return ucfirst($value)                                    if ($mangle eq "UCFIRST");
+    return undef                                              if ($mangle eq "CMD" && !-x $value);
+    return $value;    # don't know how to handle this mangle option
+  } ## end if ($value ne '')
+  return $value;
 }
 
 
