@@ -622,30 +622,29 @@ sub do_executeHook {
   my $instance  = $keystore->{INSTANCE};
   my $options   = $instance->{OPTIONS};
   my $entryname = $options->{ENTRYNAME};
+  my $entry     = $options->{ENTRY};
   my $config    = $options->{CONFIG};
 
   my $hook        = $self->getOption('hook');
   my $definitions = $self->getOption('define');
-  my %args;
+  my %hookargs;
   foreach (@{$definitions}) {
     (my $key, my $value) = split('=');
-    $args{$key} = $value;
+    $hookargs{$key} = $value;
   }
 
   if ($hook) {
-    my $hookdef = "keystore.$entryname.hook.$hook";
-    my $hookcmd = $config->get($hookdef);
-    if ($hookcmd) {
-      CertNanny::Logging->debug('MSG', "Executing hook <$hookdef> with command <$hookcmd>");
-      CertNanny::Logging->Out('STR', "Executing hook <$hookdef> with command <$hookcmd>\n");
-      $keystore->k_executeHook($hookcmd, %args);
+    if ($entry->{hook}) {
+      CertNanny::Logging->debug('MSG', "Executing keystore <$entryname> hook <$hook> with command <$entry->{hook}>");
+      CertNanny::Logging->Out('STR', "Executing keystore <$entryname> hook <$hook> with command <$entry->{hook}>\n");
+      $keystore->k_executeHook($entry->{hook}, %hookargs);
     } else {
-      CertNanny::Logging->debug('MSG', "No command defined for hook <$hookdef> (possible typo in config or command line?)");
-      CertNanny::Logging->Out('STR', "No command defined for hook <$hookdef> (possible typo in config or command line?)\n");
+      CertNanny::Logging->debug('MSG', "No command defined for keystore <$entryname> hook <$hook> (possible typo in config or command line?)");
+      CertNanny::Logging->Out('STR', "No command defined for keystore <$entryname> hook <$hook> (possible typo in config or command line?)\n");
     }
   } else {
-  	CertNanny::Logging->debug('MSG', "No hook specified for executeHook operation");
-    CertNanny::Logging->Out('STR', "No hook specified for executeHook operation\n");
+  	CertNanny::Logging->debug('MSG', "No hook specified for keystore <$entryname> executeHook operation");
+    CertNanny::Logging->Out('STR', "No hook specified for keystore <$entryname> executeHook operation\n");
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Info");
