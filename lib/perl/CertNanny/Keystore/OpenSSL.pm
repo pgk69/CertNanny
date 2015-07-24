@@ -35,6 +35,8 @@ sub new {
   my $class = ref($proto) || $proto;
   my %args = (@_);    # argument pair list
 
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating OpenSSL keystore <$args{ENTRYNAME}>.");
+
   my $self = {};
   bless $self, $class;
 
@@ -64,7 +66,7 @@ sub new {
     }
   } else {
     if (defined($entry->{initialenroll}->{activ})) {
-      CertNanny::Logging->info('MSG', "Initial enrollment mode, skip check for key and cert file");
+      CertNanny::Logging->info('MSG', "Initial enrollment mode: Skip check for key and cert file");
     } else {
       # If it's not an Initial Enrollment, we need at least
       #   - keyfile
@@ -163,13 +165,16 @@ sub new {
     }
 
     # RETRIEVE AND STORE STATE
-    # get previous renewal status
-    return 0 if !defined($self->k_retrieveState());
-    # check if we can write to the file
-    return 0 if !defined($self->k_storeState());
-    
+    # get previous renewal status and check if we can write to the file
+    if (!defined($self->k_retrieveState()) || !defined($self->k_storeState())) {
+      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating MQ keystore <$args{ENTRYNAME}>.");
+      return;
+    }
   } #location root only 
+
   # return new keystore object
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating MQ keystore <$args{ENTRYNAME}>.");
+    
   return $self;
 } ## end sub new
 
@@ -644,8 +649,8 @@ sub createRequest {
     my $DN;
     #for inital enrollment we override the DN to use the configured desiered DN rather then the preset enrollment certificates DN
     if (defined($entry->{initialenroll}->{activ})) {
-     # $DN = $entry->{initialenroll}->{subject};
-      $DN = $config->get("keystore.$entryname.initialenroll.subject");
+      $DN = $entry->{initialenroll}->{subject};
+      # @@@ $DN = $config->get("keystore.$entryname.initialenroll.subject");
     } else {
       $DN = $self->{CERT}->{CERTINFO}->{SubjectName};
     }
@@ -680,8 +685,8 @@ sub createRequest {
         foreach my $key (keys %{$entry->{initialenroll}->{san}}) {
           next SANS if ($key eq 'INHERIT');
           $newsans .=
-          $config->get("keystore.$entryname.initialenroll.san.$key"). ',';
-            #$entry->{initialenroll}->{san}->{$key} . ',';
+          # @@@ $config->get("keystore.$entryname.initialenroll.san.$key"). ',';
+          $entry->{initialenroll}->{san}->{$key} . ',';
         }
         ##write inittal enrollment SANs into the cert information without last ','
         $self->{CERT}->{CERTINFO}->{SubjectAlternativeName} = substr($newsans, 0, -1);
@@ -757,11 +762,16 @@ sub createRequest {
     push(@cmd, ('-passin', 'env:PIN')) unless $pin eq "";
     push(@cmd, @engine_cmd);
     $ENV{PIN} = $pin;
-    if (CertNanny::Util->runCommand(\@cmd)->{RC} != 0) {
+    my $cmdresult = CertNanny::Util->runCommand(\@cmd);
+    if ($cmdresult->{RC} != 0) {
       CertNanny::Logging->error('MSG', "Request creation failed");
+      foreach (@{$cmdresult->{STDERR}}) {
+        chomp;
+        CertNanny::Logging->error('MSG', $_);
+      }  
       delete $ENV{PIN};
       CertNanny::Util->wipe(FILE => $tmpconfigfile, SECURE => 1);
-      return undef;
+      return;
     }
     delete $ENV{PIN};
     CertNanny::Util->wipe(FILE => $tmpconfigfile, SECURE => 1);

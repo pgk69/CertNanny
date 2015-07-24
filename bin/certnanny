@@ -229,7 +229,7 @@ if ($OSNAME eq 'MSWin32') {
         }
  
         #if the renewal was successful the starttime will be increased by one day (86400 seconds -> 24hours -> 3600 seconds per hour)
-        my $timeframe = $monitor->getConfigValue("platform.windows.serviceinterval", "FILE") || 86400;
+        my $timeframe = $monitor->{CONFIG}->get("platform.windows.serviceinterval", "FILE") || 86400;
         $starttime = $currtime + $timeframe;
       } ## end if ($currtime >= $starttime)
       Win32::Sleep($SERVICE_SLEEP_TIME);

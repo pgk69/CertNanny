@@ -98,12 +98,6 @@ sub DESTROY {
 }
 
 
-sub getConfigValue {
-  my $self = (shift)->getInstance();
-  return $self->{CONFIG}->get(@_);
-}
-
-
 sub setOption {
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3]);
   my $self  = (shift)->getInstance();
@@ -191,6 +185,7 @@ sub _work_on_entry {
   if (ref($keystore)) {
     # Keystore could be instantiated -> execute operation
     $self->$action(MODE      => $mode,
+                   ENTRY     => $entry,
                    ENTRYNAME => $entryname,
                    KEYSTORE  => $keystore);
   } elsif ($keystore eq '0') {
@@ -202,7 +197,8 @@ sub _work_on_entry {
     if ($action eq 'do_renew' or $action eq 'do_enroll') {
       # Maybe some day we allow a enrollment on en existing Keystore if Mode is FORCED
       $self->do_enroll(ENTRYNAME => $entryname,
-                       ENTRY     => $self->{ITEMS}->{$entryname});
+                       ENTRY     => $entry);
+#                       ENTRY     => $self->{ITEMS}->{$entryname});
     } else {
       CertNanny::Logging->error('MSG', "Skipping.");
     }
@@ -370,6 +366,7 @@ sub do_check {
   my $instance  = $keystore->{INSTANCE};
   my $options   = $instance->{OPTIONS};
   my $entryname = $options->{ENTRYNAME};
+  my $entry     = $args{ENTRY};
   my $config    = $options->{CONFIG};
 
   my $rc = undef;
@@ -380,7 +377,7 @@ sub do_check {
     CertNanny::Logging->debug('MSG', "------------------------------------------------------------------------");
     $rc = 1;
   } else {
-    $keystore->k_executeHook($config->get("keystore.$entryname.hook.execution"));
+    $keystore->k_executeHook($entry->{hook}->{execution});
     $keystore->{CERT} = $instance->getCert();
     if (defined($keystore->{CERT})) {
       $keystore->{CERT}->{CERTINFO} = CertNanny::Util->getCertInfoHash(%{$keystore->{CERT}});
@@ -389,7 +386,7 @@ sub do_check {
         CertNanny::Logging->debug('MSG', "------------------------------------------------------------------------------");
         CertNanny::Logging->error('MSG', "EXPIRED ($entryname): Certificate has expired. Too late for automatic renewal.");
         CertNanny::Logging->debug('MSG', "------------------------------------------------------------------------------");
-        $instance->k_executeHook($config->get("keystore.$entryname.hook.warnexpired"));
+        $instance->k_executeHook($entry->{hook}->{warnexpired});
       } else {
         $rc = 1;
         if ($instance->k_validEqualLessThan($self->{ITEMS}->{$args{ENTRYNAME}}->{autorenew_days})) {
@@ -406,7 +403,7 @@ sub do_check {
           CertNanny::Logging->debug('MSG', "------------------------------------------------------------------------------------------------");
           CertNanny::Logging->notice('MSG', "WARNEXPIRY ($entryname): Certificate  is valid for less than $self->{ITEMS}->{$args{ENTRYNAME}}->{warnexpiry_days} days");
           CertNanny::Logging->debug('MSG', "------------------------------------------------------------------------------------------------");
-          $rc = $instance->k_executeHook($config->get("keystore.$entryname.hook.warnexpiry"));
+          $rc = $instance->k_executeHook($entry->{hook}->{warnexpiry});
         }
       }
     } else {
@@ -434,7 +431,7 @@ sub do_renew {
   my $entryname = $options->{ENTRYNAME};
   my $config    = $options->{CONFIG};
 
-  if (defined($self->do_check(%args))) {
+  if (($args{MODE} eq 'FORCED') || defined($self->do_check(%args))) {
     $self->do_updateRootCA(%args);
     if($self->{ITEMS}->{$entryname}->{'location'} ne 'rootonly') {
       if (($args{MODE} eq 'FORCED') || $instance->k_validEqualLessThan($self->{ITEMS}->{$entryname}->{autorenew_days})) {
@@ -461,10 +458,10 @@ sub _enroll_location {
   my $rc;
   
   if ($args{METHODE} eq 'certificate') {
-    $rc = $args{ENTRY}->{initialenroll}->{auth}->{cert}
+    $rc = $args{ENROLLMENT}->{initialenroll}->{auth}->{cert}
   }
   if (($args{METHODE} eq 'password') || ($args{METHODE} eq 'anonymous')) {
-    $rc = File::Spec->catfile($args{ENTRY}->{statedir}, $args{ENTRYNAME} . "-selfcert.pem");
+    $rc = File::Spec->catfile($args{ENROLLMENT}->{statedir}, $args{ENROLLMENTNAME} . "-selfcert.pem");
 
     if (-e $rc) {
       CertNanny::Logging->debug('MSG', "Initial Enrollment Certificate already exists");
@@ -484,17 +481,17 @@ sub _enroll_file {
   my $rc;
   
   if ($args{METHODE} eq 'certificate') {
-    $rc = $args{ENTRY}->{initialenroll}->{auth}->{key}
+    $rc = $args{ENROLLMENT}->{initialenroll}->{auth}->{key}
   }
   if (($args{METHODE} eq 'password') || ($args{METHODE} eq 'anonymous')) {
     if ($args{METHODE} eq 'password') {
-      if (!defined $args{ENTRY}->{initialenroll}->{auth}->{challengepassword}) {
+      if (!defined $args{ENROLLMENT}->{initialenroll}->{auth}->{challengepassword}) {
         CertNanny::Logging->debug('MSG', 'Using commandline argument challangePassword for initial enrollment');
-        $args{ENTRY}->{initialenroll}->{auth}->{challengepassword} = $self->getOption('challengepassword');
+        $args{ENROLLMENT}->{initialenroll}->{auth}->{challengepassword} = $self->getOption('challengepassword');
       }
     }
  
-    $rc = File::Spec->catfile($args{ENTRY}->{statedir}, $args{ENTRYNAME} . "-key.pem");
+    $rc = File::Spec->catfile($args{ENROLLMENT}->{statedir}, $args{ENROLLMENTNAME} . "-key.pem");
     if (-e $rc) {
       CertNanny::Logging->debug('MSG', "Initial Enrollment Key already generated");
     } else {
@@ -536,7 +533,7 @@ sub do_enroll {
             $args{KEYFILE}  = $selfsigned->{KEY};
           }
           # copy current entry and change copy to an enrollment keystore
-          $args{ENROLLMENTNAME}   = $entryname.'enrollment';  
+          $args{ENROLLMENTNAME}   = $entryname.'.enrollment';  
           $entryname              = $args{ENROLLMENTNAME};
           $args{ENROLLMENT}       = clone($entry);
           $entry                  = $args{ENROLLMENT};

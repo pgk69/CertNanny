@@ -37,6 +37,8 @@ sub new {
   my $class = ref($proto) || $proto;
   my %args = (@_);    # argument pair list
 
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating Windows keystore <$args{ENTRYNAME}>.");
+
   my $self = {};
   bless $self, $class;
 
@@ -98,12 +100,14 @@ sub new {
   }
 
   # RETRIEVE AND STORE STATE
-  # get previous renewal status
-  return if !defined($self->k_retrieveState());
-  # check if we can write to the file
-  return if !defined($self->k_storeState());
+  # get previous renewal status and check if we can write to the file
+  if (!defined($self->k_retrieveState()) || !defined($self->k_storeState())) {
+    CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating Windows keystore <$args{ENTRYNAME}>.");
+    return;
+  }
 
   # return new keystore object
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating Windows keystore <$args{ENTRYNAME}>.");
   return $self;
 } ## end sub new
 

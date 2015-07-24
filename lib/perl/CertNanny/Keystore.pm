@@ -44,13 +44,15 @@ sub new {
   my %args = (@_,    # argument pair list
              );
 
-  my $self = {};
-  bless $self, $class;
-  
   my $entry     = $args{ENTRY};
   my $entryname = $args{ENTRYNAME};
   my $config    = $args{CONFIG};
+
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
   
+  my $self = {};
+  bless $self, $class;
+
   #  # Store singleton objects in CertNanny
   #  $self->{CONFIG}  = CertNanny::Config->getInstance(%args); return undef unless defined $self->{CONFIG};
   #  $self->{UTIL}    = CertNanny::Util->getInstance(CONFIG => $self->{CONFIG});
@@ -73,6 +75,7 @@ sub new {
   my $type = $entry->{type};
   if (!defined $type || ($type eq "none")) {
     CertNanny::Logging->error('MSG', "No keystore type defined.");
+    CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
     return 0;
   }
   
@@ -82,16 +85,19 @@ sub new {
   foreach my $item (qw(statedir scepcertdir)) {
     if (!exists $entry->{$item}) {
       CertNanny::Logging->error('MSG', "No $item specified.");
+      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
       return 0;
     }
     if (!-d $entry->{$item})     {
       CertNanny::Logging->error('MSG', "$item directory $entry->{$item} does not exist.");
+      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
       return 0;
     }
     if (!-x $entry->{$item} or
         !-r $entry->{$item} or
         !-w $entry->{$item})     {
       CertNanny::Logging->error('MSG', "Insufficient permissions for $item $entry->{$item}.");
+      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
       return 0;
     }
   } ## end foreach my $item (qw(statedir scepcertdir))
@@ -108,6 +114,7 @@ sub new {
   if ($@) {
     CertNanny::Logging->error('MSG', , join('', $@));
     CertNanny::Logging->error('MSG', "Could not load keystore handler <$type>");
+    CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
     return 0;
   }
 
@@ -118,11 +125,12 @@ sub new {
                                                              \%{\$self->{OPTIONS}}))"; # give it some common parameters from configfile
   if (!ref($self->{INSTANCE})) {
     CertNanny::Logging->error('MSG', "Could not initialize keystore handler '$type' for keystore '$self->{OPTIONS}->{ENTRYNAME}': $self->{INSTANCE}");
+    CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
     return;
   }
 
   if (defined($entry->{initialenroll}->{activ})) {
-    CertNanny::Logging->debug('MSG', "Initialenrollment activ: Keystore that has no certificate to read yet.");
+    CertNanny::Logging->debug('MSG', "Initial enrollment mode: Keystore that has no certificate to read yet.");
   } else {
     if ($entry->{location} eq "rootonly") {
        CertNanny::Logging->debug('MSG', "Rootonly keystore: No certificate to read.");
@@ -147,17 +155,21 @@ sub new {
         }
       } else {
         CertNanny::Logging->error('MSG', "Could not parse instance certificate");
+        CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
         return 0;
       }
       $self->{INSTANCE}->k_setCert($self->{CERT});
     }
 
     # get previous renewal status
-    return 0 if !defined($self->k_retrieveState());
-    # check if we can write to the file
-    return 0 if !defined($self->k_storeState());
+    # and check if we can write to the file
+    if (!defined($self->k_retrieveState()) || !defined($self->k_storeState())) {
+      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
+      return 0;
+    }
   }
   
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
   return $self;
 } ## end sub new
 
@@ -1162,7 +1174,8 @@ sub k_getNextTrustAnchor {
                   my $newCAFileName = join("-", @newCAfilePart);
                   $newCAFileName .= ".pem";
 
-                  my $RootCertFile = File::Spec->catfile($config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'), $newCAFileName);
+                  my $RootCertFile = File::Spec->catfile($entry->{TrustedRootCA}->{AUTHORITATIVE}->{Directory}, 'FILE', $newCAFileName);
+#                  my $RootCertFile = File::Spec->catfile($config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'), $newCAFileName);
                   CertNanny::Logging->debug('MSG', "$fingerprint: File:" . $RootCertFile ."\n content: ". $pemCACert);
                   
                   if (!defined($pemCACert) || !defined($RootCertFile) || !CertNanny::Util->writeFile(SRCCONTENT => $pemCACert,
@@ -1230,12 +1243,13 @@ sub k_getAvailableRootCerts {
     $rc = $self->{INSTANCE}->{availableRootCerts};
   } else {
     my $res;
-    my $locRootCA = $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE');
+#    my $locRootCA = $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE');
+    my $locRootCA = $entry->{TrustedRootCA}->{AUTHORITATIVE}->{Directory};
     CertNanny::Logging->debug('MSG', "Authoritative Root CA Dir: $locRootCA");
     foreach (@{CertNanny::Util->fetchFileList($locRootCA)}) {
       push(@{$rc}, $res) if ($res = $self->_checkCert($_));
     }
-    CertNanny::Logging->debug('MSG', "get all available root certificates from ". $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+    CertNanny::Logging->debug('MSG', "get all available root certificates from <$locRootCA>");
     $self->{INSTANCE}->{availableRootCerts} = $rc;
   }
   
@@ -1273,7 +1287,8 @@ sub k_getAvailableRootCAs {
     $rc = $self->{INSTANCE}->{availableRootCAs};
   } else {
     my $certRef;
-    my $locRootCA = $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE');
+#    my $locRootCA = $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE');
+    my $locRootCA = $entry->{TrustedRootCA}->{AUTHORITATIVE}->{Directory};
     CertNanny::Logging->debug('MSG', "Searching at location <$locRootCA>");
     foreach (@{CertNanny::Util->fetchFileList($locRootCA)}) {
       CertNanny::Logging->debug('MSG', "Checking <$_>");
@@ -1397,7 +1412,8 @@ sub k_getInstalledNonRootCerts {
   # First fetch available root certificates
   my $availableRootCAs = $self->k_getAvailableRootCAs();
   if (!defined($availableRootCAs)) {
-    $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+#    $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+    $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . $entry->{TrustedRootCA}->{AUTHORITATIVE}->{Directory}, 'FILE');
   }
 
   if (!$rc) {
@@ -1740,7 +1756,7 @@ sub k_syncRootCAs {
     }
     delete($self->{hook});
   } else {
-    CertNanny::Logging->error('MSG', "No root certificates found in " . $config->get("keystore.$entryname.TrustedRootCA.AUTHORITATIVE.Directory", 'FILE'));
+    CertNanny::Logging->error('MSG', "No root certificates found in " . $entry->{TrustedRootCA}->{AUTHORITATIVE}->{Directory}, 'FILE');
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3]);
