@@ -80,10 +80,15 @@ sub new {
     }
 
 
-    if($self->{CONFIG}->get("cmd.opensslconf", "FILE")){
+    if ($self->{CONFIG}->get("cmd.opensslconf", "FILE")) {
       $ENV{OPENSSL_CONF} = $self->{CONFIG}->get("cmd.opensslconf", "FILE");
       CertNanny::Logging->debug('MSG', "set OPENSSL_CONF enviroment var to: <" . $self->{CONFIG}->get("cmd.opensslconf", "FILE") . ">");
     }
+    $self->{OPENSSL_DIGEST} = 'sha1';
+    if ($self->{CONFIG}->get("cmd.openssldigest")) {
+      $self->{OPENSSL_DIGEST} = $self->{CONFIG}->get("cmd.opensslconf");
+    }
+    CertNanny::Logging->debug('MSG', "set default Digest to: <" . $self->{DIGEST} . ">");
 
     $self->{ITEMS} = ${$self->{CONFIG}->getRef("keystore", 'ref')};
     delete $self->{ITEMS}->{DEFAULT};
@@ -514,19 +519,19 @@ sub do_enroll {
   my $rc;
 
   if (defined($entry->{initialenroll}->{activ})) {
-    CertNanny::Logging->error('MSG', "Keystore <$entryname>: Initial enrollment already activ.");
+    CertNanny::Logging->info('MSG', "Keystore <$entryname>: Initial enrollment already activ.");
   } else {
     if (defined($args{KEYSTORE})) {
       # NO KEYSTORE in %args allowed, since enrollment on an existing Keystore ist not supported!!!
       CertNanny::Logging->error('MSG', "Keystore <$entryname>: Initial enrollment on an existing keystore is not supported.");
     } else {
-      CertNanny::Logging->error('MSG', "Keystore <$entryname>: Check for initial enrollment configuration.");
+      CertNanny::Logging->debug('MSG', "Keystore <$entryname>: Check for initial enrollment configuration.");
       if (defined($args{METHODE} = $entry->{initialenroll}->{auth}->{mode})) {
         if (($args{METHODE} eq 'certificate') || ($args{METHODE} eq 'password') || ($args{METHODE} eq 'anonymous')) {
           CertNanny::Logging->info('MSG', "Keystore <$entryname>: Found initial enrollment configuration for " . $self->{ITEMS}->{$entryname}->{initialenroll}->{subject});
           if (($args{METHODE} eq 'password') || ($args{METHODE} eq 'anonymous')) {
             # create selfsigned certificate
-            my $selfsigned = CertNanny::Util->createSelfSign('DIGEST'    => 'sha1',
+            my $selfsigned = CertNanny::Util->createSelfSign('DIGEST'    => $self->{OPENSSL_DIGEST},
                                                              'ENTRY'     => $entry,
                                                              'ENTRYNAME' => $entryname);
             $args{CERTFILE} = $selfsigned->{CERT};

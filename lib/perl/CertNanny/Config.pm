@@ -495,6 +495,8 @@ sub _sha1_hex {
   my $sha;
   my $openssl = $self->get('cmd.openssl', 'CMD');
   if (defined($openssl)) {
+    # Digest Mode is fixed to sha, since we just need this to see wether s.th. is changed and we did not read 
+    # the config file yet
     my @cmd = (CertNanny::Util->osq($openssl), 'dgst', '-sha', CertNanny::Util->osq($file));
     chomp($sha = shift(@{CertNanny::Util->runCommand(\@cmd)->{STDOUT}}));
     if ($sha =~ /^.*\)= (.*)$/) {

@@ -522,7 +522,6 @@ sub getKey {
       my $pin       = $self->{PIN} || $self->{OPTIONS}->{ENTRY}->{key}->{pin};
       my $keyformat = ($keydata =~ m{ -----BEGIN.*KEY----- }xms) ? 'PEM' : 'DER';
 
-      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get private key for main certificate from keystore");
       $rc = {KEYDATA   => $keydata,
              KEYTYPE   => $self->{KEYTYPE},
              KEYFORMAT => $keyformat,

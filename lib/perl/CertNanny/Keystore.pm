@@ -129,44 +129,41 @@ sub new {
     return;
   }
 
-  if (defined($entry->{initialenroll}->{activ})) {
-    CertNanny::Logging->debug('MSG', "Initial enrollment mode: Keystore that has no certificate to read yet.");
+  if ($entry->{location} eq "rootonly") {
+    CertNanny::Logging->debug('MSG', "Rootonly keystore: No certificate to read.");
   } else {
-    if ($entry->{location} eq "rootonly") {
-       CertNanny::Logging->debug('MSG', "Rootonly keystore: No certificate to read.");
-    } else {
-      # get certificate
-      $self->{CERT} = $self->{INSTANCE}->getCert();
+    CertNanny::Logging->debug('MSG', "Initial enrollment mode: Keystore that has no certificate to read yet.") if (defined($entry->{initialenroll}->{activ}));
+    # get certificate
+    $self->{CERT} = $self->{INSTANCE}->getCert();
   
-      if (defined($self->{CERT}) && defined($self->{CERT}->{CERTINFO} = CertNanny::Util->getCertInfoHash(%{$self->{CERT}}))) {
-        CertNanny::Logging->debug('MSG', "Certificate Information: SubjectName: <" . $self->{CERT}->{CERTINFO}->{SubjectName} . ">");
-        CertNanny::Logging->debug('MSG', "                         Serial:      <" . $self->{CERT}->{CERTINFO}->{SerialNumber} . ">");
-        CertNanny::Logging->debug('MSG', "                         Issuer:      <" . $self->{CERT}->{CERTINFO}->{IssuerName} . ">");
-        CertNanny::Logging->debug('MSG', "                         valid from:  <" . $self->{CERT}->{CERTINFO}->{NotBefore} . ">");
-        CertNanny::Logging->debug('MSG', "                         valid until: <" . $self->{CERT}->{CERTINFO}->{NotAfter} . ">");
+    if (defined($self->{CERT}) && defined($self->{CERT}->{CERTINFO} = CertNanny::Util->getCertInfoHash(%{$self->{CERT}}))) {
+      CertNanny::Logging->debug('MSG', "Certificate Information: SubjectName: <" . $self->{CERT}->{CERTINFO}->{SubjectName} . ">");
+      CertNanny::Logging->debug('MSG', "                         Serial:      <" . $self->{CERT}->{CERTINFO}->{SerialNumber} . ">");
+      CertNanny::Logging->debug('MSG', "                         Issuer:      <" . $self->{CERT}->{CERTINFO}->{IssuerName} . ">");
+      CertNanny::Logging->debug('MSG', "                         valid from:  <" . $self->{CERT}->{CERTINFO}->{NotBefore} . ">");
+      CertNanny::Logging->debug('MSG', "                         valid until: <" . $self->{CERT}->{CERTINFO}->{NotAfter} . ">");
   
-        my %convopts = %{$self->{CERT}};
-        foreach ('PEM', 'DER') {
-          $convopts{OUTFORMAT} = $_;
-          $self->{CERT}->{RAW}->{$_} = undef;
-          if (my $output = CertNanny::Util->convertCert(%convopts)) {
-            $self->{CERT}->{RAW}->{$_} = $output->{CERTDATA};
-          }
+      my %convopts = %{$self->{CERT}};
+      foreach ('PEM', 'DER') {
+        $convopts{OUTFORMAT} = $_;
+        $self->{CERT}->{RAW}->{$_} = undef;
+        if (my $output = CertNanny::Util->convertCert(%convopts)) {
+          $self->{CERT}->{RAW}->{$_} = $output->{CERTDATA};
         }
-      } else {
-        CertNanny::Logging->error('MSG', "Could not parse instance certificate");
-        CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
-        return 0;
       }
-      $self->{INSTANCE}->k_setCert($self->{CERT});
-    }
-
-    # get previous renewal status
-    # and check if we can write to the file
-    if (!defined($self->k_retrieveState()) || !defined($self->k_storeState())) {
+    } else {
+      CertNanny::Logging->error('MSG', "Could not parse instance certificate");
       CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
       return 0;
     }
+    $self->{INSTANCE}->k_setCert($self->{CERT});
+  }
+
+  # get previous renewal status
+  # and check if we can write to the file
+  if (!defined($self->k_retrieveState()) || !defined($self->k_storeState())) {
+    CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
+    return 0;
   }
   
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating keystore <$entryname>.");
@@ -2125,15 +2122,15 @@ sub _sendRequest {
     }
 
     my $scepchecksubjectname = (defined $entry->{scepchecksubjectname}) ? $entry->{scepchecksubjectname} : 'no';
-    CertNanny::Logging->debug('MSG', "request:              <$requestfile>");
-    CertNanny::Logging->debug('MSG', "keyfile:              <$newkeyfile>");
-    CertNanny::Logging->debug('MSG', "sscep:                <" . $config->get('cmd.sscep') . ">");
-    CertNanny::Logging->debug('MSG', "scepurl:              <" . $entry->{enroll}->{sscep}->{URL} . ">");
-    CertNanny::Logging->debug('MSG', "scepsignaturekey:     <$entry->{scepsignaturekey}" . ">");
-    CertNanny::Logging->debug('MSG', "scepchecksubjectname: <" . $scepchecksubjectname . ">");
-    CertNanny::Logging->debug('MSG', "scepracert:           <$self->{STATE}->{DATA}->{SCEP}->{RACERT}>");
-    CertNanny::Logging->debug('MSG', "newcertfile:          <$newcertfile>");
-    CertNanny::Logging->debug('MSG', "openssl:              <" . $options->{'cmd.openssl'} . ">");
+    CertNanny::Logging->debug('MSG', "Request:                <$requestfile>");
+    CertNanny::Logging->debug('MSG', "Keyfile:                <$newkeyfile>");
+    CertNanny::Logging->debug('MSG', "openssl Binary:         <" . $options->{'cmd.openssl'} . ">");
+    CertNanny::Logging->debug('MSG', "sscep Binary:           <" . $config->get('cmd.sscep') . ">");
+    CertNanny::Logging->debug('MSG', "scep URL:               <" . $entry->{enroll}->{sscep}->{URL} . ">");
+    CertNanny::Logging->debug('MSG', "scep Signature Key:     <$entry->{scepsignaturekey}" . ">");
+    CertNanny::Logging->debug('MSG', "scep Signature Cert:    <$newcertfile>");
+    CertNanny::Logging->debug('MSG', "scep check Subjectname: <" . $scepchecksubjectname . ">");
+    CertNanny::Logging->debug('MSG', "scep racert:            <$self->{STATE}->{DATA}->{SCEP}->{RACERT}>");
 
     if (!$self->_sendRequest_enroll($requestfile, $newkeyfile, $newcertfile)) {
       CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3]);
