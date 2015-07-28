@@ -804,8 +804,8 @@ sub getInstalledCAs {
     CertNanny::Util->writeFile(DSTFILE => $tmpFile,
                                           SRCFILE => $cert->{CERTFILE}, 
                                           APPEND  => 0 );
-    my  $certSha1 = CertNanny::Util->getCertSHA1(CERTFILE => $tmpFile);    
-    $ignoreCertHashes{$certSha1->{'CERTSHA1'}} = $certSha1->{'CERTSHA1'} ;                                     
+    my  $certDigest = CertNanny::Util->getCertDigest(CERTFILE => $tmpFile);    
+    $ignoreCertHashes{$certDigest->{'CERTDIGEST'}} = $certDigest->{'CERTDIGEST'} ;                                     
   }    
      
                        
@@ -815,9 +815,9 @@ sub getInstalledCAs {
                              SRCCONTENT => $cert->{'RAW'}->{'PEM'}, 
                              APPEND  => 0 );
   CertNanny::Logging->debug('MSG', Dumper($cert)); 
-  my  $certSha1 = CertNanny::Util->getCertSHA1(CERTFILE => $tmpCertFile);  
+  my  $certDigest = CertNanny::Util->getCertDigest(CERTFILE => $tmpCertFile);  
   
-  $ignoreCertHashes{$certSha1->{'CERTSHA1'}} = $certSha1->{'CERTSHA1'} ;    
+  $ignoreCertHashes{$certDigest->{'CERTDIGEST'}} = $certDigest->{'CERTDIGEST'} ;    
 
   if (!defined($args{TARGET}) or ($args{TARGET} eq 'LOCATION')) {
     if (defined(my $locName = CertNanny::Util->mangle($entry->{location}, 'FILE'))) {
@@ -826,7 +826,7 @@ sub getInstalledCAs {
         $locName = CertNanny::Util->mangle($entry->{location}, 'FILE');
       }
 
-      my ($certRef, @certList, $certData, $certSha1, $certAlias, $certCreateDate, $certType, $certFingerprint);
+      my ($certRef, @certList, $certData, $certDigest, $certAlias, $certCreateDate, $certType, $certFingerprint);
       
       my @cmd ;
       # get label name for user certificate
@@ -856,22 +856,22 @@ sub getInstalledCAs {
           if (defined($certInfo)) {    
             # if (my $certTyp = $self->k_getCertType(CERTINFO => $certInfo)) {     ##skip type definiton for MQ keystores they often contain Verisign certs that are missing basic constrains 
             my $certTyp = $self->k_getCertType(CERTINFO => $certInfo);
-            $certSha1 = CertNanny::Util->getCertSHA1(CERTFILE => $certexport);
+            $certDigest = CertNanny::Util->getCertDigest(CERTFILE => $certexport);
 
-            if($ignoreCertHashes{$certSha1->{'CERTSHA1'}}){
+            if($ignoreCertHashes{$certDigest->{'CERTDIGEST'}}){
               $ignore =1 ;
             }            
 
             if ($ignore == 0) {
-              $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTALIAS}       = $certlabel;
-              $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTCREATEDATE}  = $certInfo->{'NotBefore'};
-              $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTTYPE}        = $certType;
-              $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTFINGERPRINT} = $certInfo->{'CertificateFingerprint'};
-              $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTDATA}        = $certInfo->{'Certificate'};
-              $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTFORMAT}      = 'PEM';
-              $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTINFO}        = $certInfo;
+              $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTALIAS}       = $certlabel;
+              $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTCREATEDATE}  = $certInfo->{'NotBefore'};
+              $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTTYPE}        = $certType;
+              $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTFINGERPRINT} = $certInfo->{'CertificateFingerprint'};
+              $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTDATA}        = $certInfo->{'Certificate'};
+              $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTFORMAT}      = 'PEM';
+              $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTINFO}        = $certInfo;
                   
-              $certFound->{$certSha1->{CERTSHA1}} = $self->{$certTyp}->{$certSha1->{CERTSHA1}};
+              $certFound->{$certDigest->{CERTDIGEST}} = $self->{$certTyp}->{$certDigest->{CERTDIGEST}};
             } else {
               CertNanny::Logging->debug('MSG', "skiping certLabel <$certlabel>"); 
             }
@@ -997,15 +997,15 @@ sub installRoots {
           my $availableRootCAs = {};
           # Foreach available root cert get the SHA1
           foreach my $certRef (@{$rootCertList}) {
-            my $certSHA1 = CertNanny::Util->getCertSHA1(%{$certRef})->{CERTSHA1};
-            if (exists($availableRootCAs->{$certSHA1})) {
-              if (exists($availableRootCAs->{$certSHA1}->{CERTFILE}) and ($certRef->{CERTFILE})) {
-                CertNanny::Logging->debug('MSG', "Identical root certificate in <" . $availableRootCAs->{$certSHA1}->{CERTFILE} . "> and <" . $certRef->{CERTFILE} . ">");
+            my $certDigest = CertNanny::Util->getCertDigest(%{$certRef})->{CERTDIGEST};
+            if (exists($availableRootCAs->{$certDigest})) {
+              if (exists($availableRootCAs->{$certDigest}->{CERTFILE}) and ($certRef->{CERTFILE})) {
+                CertNanny::Logging->debug('MSG', "Identical root certificate in <" . $availableRootCAs->{$certDigest}->{CERTFILE} . "> and <" . $certRef->{CERTFILE} . ">");
               } else {
-                CertNanny::Logging->debug('MSG', "Identical root certificate <" . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} . "> found.");
+                CertNanny::Logging->debug('MSG', "Identical root certificate <" . $availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName} . "> found.");
               }
             } else {
-              $availableRootCAs->{$certSHA1} = $certRef;
+              $availableRootCAs->{$certDigest} = $certRef;
             }
           }
         }
@@ -1018,28 +1018,28 @@ sub installRoots {
         $rc = 1 if (!$dest);
         if (!$rc) {
           # delete every root CA, that does not exist in $availableRootCAs from keystore
-          foreach my $certSHA1 (keys %{$installedRootCAs}) {
-            if (!exists($availableRootCAs->{$certSHA1}) && ($self->k_getCertType($installedRootCAs->{$certSHA1}) eq 'installedRootCAs')) {
-              CertNanny::Logging->debug('MSG', "Deleting root cert " . $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+          foreach my $certDigest (keys %{$installedRootCAs}) {
+            if (!exists($availableRootCAs->{$certDigest}) && ($self->k_getCertType($installedRootCAs->{$certDigest}) eq 'installedRootCAs')) {
+              CertNanny::Logging->debug('MSG', "Deleting root cert " . $installedRootCAs->{$certDigest}->{CERTINFO}->{SubjectName});
               my @certcmd;
-              @certcmd = (CertNanny::Util->osq("$gsk6cmd"), '-cert', '-delete', '-db', CertNanny::Util->osq("$dest"), '-pw', CertNanny::Util->osq("$self->{PIN}") , '-label' ,CertNanny::Util->osq("$installedRootCAs->{$certSHA1}->{'CERTALIAS'}") );
+              @certcmd = (CertNanny::Util->osq("$gsk6cmd"), '-cert', '-delete', '-db', CertNanny::Util->osq("$dest"), '-pw', CertNanny::Util->osq("$self->{PIN}") , '-label' ,CertNanny::Util->osq("$installedRootCAs->{$certDigest}->{'CERTALIAS'}") );
 
               if (CertNanny::Util->runCommand(\@certcmd, HIDEPWD => 1)->{RC}) {
-                CertNanny::Logging->error('MSG', "Error deleting root cert " . $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+                CertNanny::Logging->error('MSG', "Error deleting root cert " . $installedRootCAs->{$certDigest}->{CERTINFO}->{SubjectName});
               }
             }
           }
 
           # copy every root CA, that does not exist in $installedRootCAs to keystore
-          foreach my $certSHA1 (keys  %{$availableRootCAs}) {
-            if (!exists($installedRootCAs->{$certSHA1})) {
-              CertNanny::Logging->debug('MSG', "Importing root cert " . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+          foreach my $certDigest (keys  %{$availableRootCAs}) {
+            if (!exists($installedRootCAs->{$certDigest})) {
+              CertNanny::Logging->debug('MSG', "Importing root cert " . $availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName});
               my $tmpFile = CertNanny::Util->getTmpFile();
               CertNanny::Util->writeFile(DSTFILE => $tmpFile,
-                                         SRCFILE => $availableRootCAs->{$certSHA1}->{'CERTFILE'});
+                                         SRCFILE => $availableRootCAs->{$certDigest}->{'CERTFILE'});
 
               my $alias = 'newRoot';
-              if ($availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} =~ /CN=([^,]+).*/) {
+              if ($availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName} =~ /CN=([^,]+).*/) {
                 ($alias = $1) =~ s/\s/_/g;
               }
 
@@ -1047,13 +1047,13 @@ sub installRoots {
               @certcmd = (CertNanny::Util->osq("$gsk6cmd"), '-cert', '-add', '-db', CertNanny::Util->osq("$dest"), '-pw', CertNanny::Util->osq("$self->{PIN}") , '-label' ,CertNanny::Util->osq("$alias") , '-file', $tmpFile ,'-format', 'ascii'  );
 
               if (CertNanny::Util->runCommand(\@certcmd, HIDEPWD => 1)->{RC}) {
-                CertNanny::Logging->error('MSG', "Error importing root cert " . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+                CertNanny::Logging->error('MSG', "Error importing root cert " . $availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName});
               } else {
                 # collect Postinstallhook information
-                $self->{hook}->{Type}   .= 'FILE' . ','                                                               if (defined($self->{hook}->{Type})   && ($self->{hook}->{Type}   !~ m/FILE/s));
-                $self->{hook}->{File}   .= $availableRootCAs->{$certSHA1}->{CERTFILE} . ','                           if (defined($self->{hook}->{File})   && ($self->{hook}->{File}   !~ m/$availableRootCAs->{$certSHA1}->{CERTFILE}/s));
-                $self->{hook}->{FP}     .= $availableRootCAs->{$certSHA1}->{CERTINFO}->{CertificateFingerprint} . ',' if (defined($self->{hook}->{FP})     && ($self->{hook}->{FP}     !~ m/$availableRootCAs->{$certSHA1}->{CERTINFO}->{CertificateFingerprint}/s));
-                $self->{hook}->{Target} .= $entry->{location} . ','                                                   if (defined($self->{hook}->{Target}) && ($self->{hook}->{Target} !~ m/$entry->{location}/s));
+                $self->{hook}->{Type}   .= 'FILE' . ','                                                                 if (defined($self->{hook}->{Type})   && ($self->{hook}->{Type}   !~ m/FILE/s));
+                $self->{hook}->{File}   .= $availableRootCAs->{$certDigest}->{CERTFILE} . ','                           if (defined($self->{hook}->{File})   && ($self->{hook}->{File}   !~ m/$availableRootCAs->{$certDigest}->{CERTFILE}/s));
+                $self->{hook}->{FP}     .= $availableRootCAs->{$certDigest}->{CERTINFO}->{CertificateFingerprint} . ',' if (defined($self->{hook}->{FP})     && ($self->{hook}->{FP}     !~ m/$availableRootCAs->{$certDigest}->{CERTINFO}->{CertificateFingerprint}/s));
+                $self->{hook}->{Target} .= $entry->{location} . ','                                                     if (defined($self->{hook}->{Target}) && ($self->{hook}->{Target} !~ m/$entry->{location}/s));
               }
             }
           }

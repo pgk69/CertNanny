@@ -608,6 +608,9 @@ sub createRequest {
   # and requests, you might choose to do all this yourself here:
   my $self = shift;
   
+  my %args = (DIGEST => 'sha1',
+              @_);
+
   my $options   = $self->{OPTIONS};
   my $entry     = $options->{ENTRY};
   my $entryname = $options->{ENTRYNAME};
@@ -759,7 +762,7 @@ sub createRequest {
     #CertNanny::Logging->debug('MSG', "The following configuration was written to $tmpconfigfile:\n" . CertNanny::Util->readFile($tmpconfigfile));
 
     # generate request
-    my @cmd = (CertNanny::Util->osq("$openssl"), 'req', '-config', CertNanny::Util->osq("$tmpconfigfile"), '-new', '-sha1', '-out', CertNanny::Util->osq("$result->{REQUESTFILE}"), '-key', CertNanny::Util->osq("$result->{KEYFILE}"),);
+    my @cmd = (CertNanny::Util->osq("$openssl"), 'req', '-config', CertNanny::Util->osq("$tmpconfigfile"), '-new', '-' . $args{DIGEST}, '-out', CertNanny::Util->osq("$result->{REQUESTFILE}"), '-key', CertNanny::Util->osq("$result->{KEYFILE}"),);
     push(@cmd, ('-passin', 'env:PIN')) unless $pin eq "";
     push(@cmd, @engine_cmd);
     $ENV{PIN} = $pin;
@@ -1153,7 +1156,7 @@ sub getInstalledCAs {
                    'file'      => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{File},      'FILE'),
                    'chainfile' => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{ChainFile}, 'FILE'));
 
-  my ($certRef, $certData, $certSha1);
+  my ($certRef, $certData, $certDigest);
   $self->{installedRootCAs} = {};
 
   foreach my $locName (keys %locSearch) {  
@@ -1169,12 +1172,12 @@ sub getInstalledCAs {
                                                             CERTFORMAT => 'PEM');
             if (defined($certInfo)) {
               if (my $certTyp = $self->k_getCertType(CERTINFO => $certInfo)) {
-                $certSha1 = CertNanny::Util->getCertSHA1(%{$certRef});
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTFILE} = $certFile;
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTDATA} = $certData;
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTINFO} = $certInfo;
+                $certDigest = CertNanny::Util->getCertDigest(%{$certRef});
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTFILE} = $certFile;
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTDATA} = $certData;
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTINFO} = $certInfo;
                 if ($certTyp eq 'installedRootCAs') {
-                  $rc->{$certSha1->{CERTSHA1}} = $self->{$certTyp}->{$certSha1->{CERTSHA1}}
+                  $rc->{$certDigest->{CERTDIGEST}} = $self->{$certTyp}->{$certDigest->{CERTDIGEST}}
                 }
               }
             }
@@ -1407,16 +1410,16 @@ sub _createLocalCerts {
   my $copy           = $args{COPY};
   my $cleanup        = $args{CLEANUP};
 
-  my ($rc, $tryCopy, $cert, @certFileList, $certFile, $certSHA1, %certSHA1Hash, $cmdTemplate, @subject_hashs, $subject_hash, $target);
+  my ($rc, $tryCopy, $cert, @certFileList, $certFile, $certDigest, %certDigestHash, $cmdTemplate, @subject_hashs, $subject_hash, $target);
   $rc = 0;
 
   if ($cleanup) {
     # Delete every certificate in the target directory, but only if it is a certificate
     @certFileList = @{CertNanny::Util->fetchFileList($certTargetDir)};
     foreach $certFile (@certFileList) {
-      $certSHA1 = CertNanny::Util->getCertSHA1(CERTFILE => $certFile);
-      if (defined($certSHA1) and defined($certSHA1->{CERTSHA1})) {
-        CertNanny::Util->wipe(FILE => $certFile, SECURE => 1) if defined($certSHA1);
+      $certDigest = CertNanny::Util->getCertDigest(CERTFILE => $certFile);
+      if (defined($certDigest) and defined($certDigest->{CERTDIGEST})) {
+        CertNanny::Util->wipe(FILE => $certFile, SECURE => 1) if defined($certDigest);
       }
     }
   }
@@ -1433,18 +1436,18 @@ sub _createLocalCerts {
       if (@subject_hashs) {
         CertNanny::Logging->info('MSG', "Valid certificate found: $certFile");
 
-        $certSHA1 = CertNanny::Util->getCertSHA1(CERTFILE => $certFile);
-        $certSHA1 = $certSHA1->{CERTSHA1} if (defined($certSHA1));
+        $certDigest = CertNanny::Util->getCertDigest(CERTFILE => $certFile);
+        $certDigest = $certDigest->{CERTDIGEST} if (defined($certDigest));
         foreach $subject_hash (@subject_hashs) {
           # find out, whether we already have this file in the linkdirectory
           my $makeTarget  = 1;
           my $counter     = 0;
-          foreach my $targetFile (keys %certSHA1Hash) {
+          foreach my $targetFile (keys %certDigestHash) {
             my ($targetName, $dummy, $targetNumber) = fileparse($targetFile, qr{\..*});
             # Find all files in the linkdirectory that match $subject_hash.*
             if ($makeTarget && ($subject_hash eq $targetName)) {
               # compare SHA1 of the file in the linkdirectory with the one to be linked
-              if ($certSHA1 eq $certSHA1Hash{$targetFile}) {
+              if ($certDigest eq $certDigestHash{$targetFile}) {
                 # SHA1 is equal => same file, nothing to do
                 $target = File::Spec->catfile($certTargetDir, $subject_hash) . $targetNumber;
                 CertNanny::Logging->info('MSG', "Not linking certificate $certFile: Certificate with identical Fingerprint and SHA1 already exists ($target)");
@@ -1484,7 +1487,7 @@ sub _createLocalCerts {
                 $rc = 1;
               }
             }
-            $certSHA1Hash{$target} = $certSHA1 if defined($certSHA1);
+            $certDigestHash{$target} = $certDigest if defined($certDigest);
           }
         }
       } else {

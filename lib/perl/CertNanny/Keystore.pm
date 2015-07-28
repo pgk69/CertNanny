@@ -1011,7 +1011,7 @@ sub k_renew {
         $self->_renewalState() eq "keygenerated") {
       CertNanny::Logging->info('MSG', "State: initial");
 
-      $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST} = $self->createRequest();
+      $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST} = $self->createRequest('DIGEST', 'sha1');
       if (defined $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}) {
         $self->_renewalState("sendrequest");
         $rc = 1;
@@ -1292,15 +1292,15 @@ sub k_getAvailableRootCAs {
       if ($certRef = $self->_checkCert($_)) {
         my $certTyp = $self->k_getCertType(%{$certRef});
         if ($certTyp  eq 'installedRootCAs') {
-          my $certSHA1 = CertNanny::Util->getCertSHA1(%{$certRef})->{CERTSHA1};
-          if (exists($rc->{$certSHA1})) {
-            if (exists($rc->{$certSHA1}->{CERTFILE}) and ($certRef->{CERTFILE})) {
-              CertNanny::Logging->debug('MSG', "Identical root certificate in <" . $rc->{$certSHA1}->{CERTFILE} . "> and <" . $certRef->{CERTFILE} . ">");
+          my $certDigest = CertNanny::Util->getCertDigest(%{$certRef})->{CERTDIGEST};
+          if (exists($rc->{$certDigest})) {
+            if (exists($rc->{$certDigest}->{CERTFILE}) and ($certRef->{CERTFILE})) {
+              CertNanny::Logging->debug('MSG', "Identical root certificate in <" . $rc->{$certDigest}->{CERTFILE} . "> and <" . $certRef->{CERTFILE} . ">");
             } else {
-              CertNanny::Logging->debug('MSG', "Identical root certificate <" . $rc->{$certSHA1}->{CERTINFO}->{SubjectName} . "> found.");
+              CertNanny::Logging->debug('MSG', "Identical root certificate <" . $rc->{$certDigest}->{CERTINFO}->{SubjectName} . "> found.");
             }
           } else {
-            $rc->{$certSHA1} = $certRef;
+            $rc->{$certDigest} = $certRef;
           }
         }
       }
@@ -1389,19 +1389,19 @@ sub k_getInstalledNonRootCerts {
   my $rc = 0;
 
   # Data structure $availableRootCAs and $installedRootCAs
-  #  -<certSHA1> #1
+  #  -<certDigest> #1
   #     |- CERTDATA  
   #     |- CERTINFO  
   #     |- optional: CERTFILE  
   #        ...
   #  
-  #  -<certSHA1> #2
+  #  -<certDigest> #2
   #     |- CERTDATA  
   #     |- CERTINFO  
   #     |- optional: CERTFILE  
   #        ...
   #  
-  #  -<certSHA1> #3
+  #  -<certDigest> #3
   #   ...
 
   my %locSearch =  %{$self->getCertLocation('TYPE' => 'TrustedRootCA')};
@@ -1425,20 +1425,20 @@ sub k_getInstalledNonRootCerts {
         my $installedRootCAs = $self->getInstalledCAs(TARGET => $target);
         my $rebuild = 0;
         # comparison $installedRootCAs to $availableRootCAs
-        foreach my $certSHA1 (keys (%{$installedRootCAs})) {
-          $rebuild ||= !exists($availableRootCAs->{$certSHA1});
+        foreach my $certDigest (keys (%{$installedRootCAs})) {
+          $rebuild ||= !exists($availableRootCAs->{$certDigest});
           if ($rebuild) {
-            CertNanny::Logging->info('MSG', "Target: $target/$locSearch{lc($target)}: Installed Root CA $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} missing in available root CAs.");
+            CertNanny::Logging->info('MSG', "Target: $target/$locSearch{lc($target)}: Installed Root CA $installedRootCAs->{$certDigest}->{CERTINFO}->{SubjectName} missing in available root CAs.");
             last;
           }
         }  
 
         if (!$rebuild) {
           # comparison $availableRootCAs to $installedRootCAs
-          foreach my $certSHA1 (keys (%{$availableRootCAs})) {
-            $rebuild ||= !exists($installedRootCAs->{$certSHA1});
+          foreach my $certDigest (keys (%{$availableRootCAs})) {
+            $rebuild ||= !exists($installedRootCAs->{$certDigest});
             if ($rebuild) {
-              CertNanny::Logging->info('MSG', "Target: $target/$locSearch{lc($target)}: Available Root CA $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} missing in installed root CAs.");
+              CertNanny::Logging->info('MSG', "Target: $target/$locSearch{lc($target)}: Available Root CA $availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName} missing in installed root CAs.");
               last;
             }
           }
@@ -1675,19 +1675,19 @@ sub k_syncRootCAs {
   my $rc;
 
   # Data structure $availableRootCAs and $installedRootCAs
-  #  -<certSHA1> #1
+  #  -<certDigest> #1
   #     |- CERTDATA  
   #     |- CERTINFO  
   #     |- optional: CERTFILE  
   #        ...
   #  
-  #  -<certSHA1> #2
+  #  -<certDigest> #2
   #     |- CERTDATA  
   #     |- CERTINFO  
   #     |- optional: CERTFILE  
   #        ...
   #  
-  #  -<certSHA1> #3
+  #  -<certDigest> #3
   #   ...
 
   my %locSearch =  %{$self->getCertLocation('TYPE' => 'TrustedRootCA')};
@@ -1705,10 +1705,10 @@ sub k_syncRootCAs {
         my $installedRootCAs = $self->getInstalledCAs(TARGET => $target);
         my $rebuild = 0;
         # comparison $installedRootCAs to $availableRootCAs
-        foreach my $certSHA1 (keys (%{$installedRootCAs})) {
-          $rebuild ||= !exists($availableRootCAs->{$certSHA1});
+        foreach my $certDigest (keys (%{$installedRootCAs})) {
+          $rebuild ||= !exists($availableRootCAs->{$certDigest});
           if ($rebuild) {
-            CertNanny::Logging->info('MSG', "Target: $target/$locSearch{lc($target)}: Installed Root CA $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} missing in available root CAs.");
+            CertNanny::Logging->info('MSG', "Target: $target/$locSearch{lc($target)}: Installed Root CA $installedRootCAs->{$certDigest}->{CERTINFO}->{SubjectName} missing in available root CAs.");
             last;
           } else {
             $rc = 1;
@@ -1717,10 +1717,10 @@ sub k_syncRootCAs {
 
         if (!$rebuild) {
           # comparison $availableRootCAs to $installedRootCAs
-          foreach my $certSHA1 (keys (%{$availableRootCAs})) {
-            $rebuild ||= !exists($installedRootCAs->{$certSHA1});
+          foreach my $certDigest (keys (%{$availableRootCAs})) {
+            $rebuild ||= !exists($installedRootCAs->{$certDigest});
             if ($rebuild) {
-              CertNanny::Logging->info('MSG', "Target: $target/$locSearch{lc($target)}: Available Root CA $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} missing in installed root CAs.");
+              CertNanny::Logging->info('MSG', "Target: $target/$locSearch{lc($target)}: Available Root CA $availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName} missing in installed root CAs.");
               last;
             } else {
               $rc = 1;

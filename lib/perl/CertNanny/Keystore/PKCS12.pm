@@ -462,7 +462,7 @@ sub getInstalledCAs {
   $self->{installedRootCAs} = $self->SUPER::getInstalledCAs(\%args) if $self->can("SUPER::getInstalledCAs");
 
   # get root certs from LOCATION
-  my ($certRef, $certData, $certSha1);
+  my ($certRef, $certData, $certDigest);
   $certRef = $self->getCert(CERTFILE => CertNanny::Util->mangle($entry->{location}, 'FILE'),
                             CERTTYPE => 'CA');
   while ($certRef and ($certData = $certRef->{CERTDATA})) {
@@ -470,12 +470,12 @@ sub getInstalledCAs {
                                                     CERTFORMAT => 'PEM');
     if (defined($certInfo)) {
       if (my $certTyp = $self->k_getCertType(CERTINFO => $certInfo)) {
-        $certSha1 = CertNanny::Util->getCertSHA1(%{$certRef});
-        $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTFILE} = CertNanny::Util->mangle($entry->{location}, 'FILE');
-        $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTDATA} = $certData;
-        $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTINFO} = $certInfo;
+        $certDigest = CertNanny::Util->getCertDigest(%{$certRef});
+        $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTFILE} = CertNanny::Util->mangle($entry->{location}, 'FILE');
+        $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTDATA} = $certData;
+        $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTINFO} = $certInfo;
         if ($certTyp eq 'installedRootCAs') {
-          $rc->{$certSha1->{CERTSHA1}} = $self->{$certTyp}->{$certSha1->{CERTSHA1}}
+          $rc->{$certDigest->{CERTDIGEST}} = $self->{$certTyp}->{$certDigest->{CERTDIGEST}}
         }
       }
     }
@@ -552,14 +552,14 @@ sub installRoots {
           my %certHash;
 
           # EE Cert is always in the PKCS12 File
-          $certHash{CertNanny::Util->getCertSHA1(%{$EECert})->{CERTSHA1}} = $EECert;
+          $certHash{CertNanny::Util->getCertDigest(%{$EECert})->{CERTDIGEST}} = $EECert;
           
           # Chain Certs is only in the PKCS12 File if excludeCAChain is NOT set
           if (!$config->getFlag("keystore.$entryname.key.excludeCAChain")) {
             $self->k_getAvailableCaCerts();
             my $certChain = $self->k_buildCertificateChain($EECert);
             foreach (@{$certChain}) {
-              $certHash{CertNanny::Util->getCertSHA1(%{$_})->{CERTSHA1}} = $_;
+              $certHash{CertNanny::Util->getCertDigest(%{$_})->{CERTDIGEST}} = $_;
             }
           }
 

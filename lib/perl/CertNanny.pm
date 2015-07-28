@@ -79,7 +79,6 @@ sub new {
       CertNanny::Logging->debug('MSG', "set java path lib to: <" . $self->{CONFIG}->get("path.libjava", "FILE") . ">");
     }
 
-
     if ($self->{CONFIG}->get("cmd.opensslconf", "FILE")) {
       $ENV{OPENSSL_CONF} = $self->{CONFIG}->get("cmd.opensslconf", "FILE");
       CertNanny::Logging->debug('MSG', "set OPENSSL_CONF enviroment var to: <" . $self->{CONFIG}->get("cmd.opensslconf", "FILE") . ">");
@@ -88,7 +87,15 @@ sub new {
     if ($self->{CONFIG}->get("cmd.openssldigest")) {
       $self->{OPENSSL_DIGEST} = $self->{CONFIG}->get("cmd.opensslconf");
     }
-    CertNanny::Logging->debug('MSG', "set default Digest to: <" . $self->{DIGEST} . ">");
+    CertNanny::Logging->debug('MSG', "set default Digest to: <" . $self->{OPENSSL_DIGEST} . ">");
+
+    my $dig = CertNanny::Util->getDigests();
+    if (defined(CertNanny::Util->getDigests()->{sha1})) {
+      CertNanny::Logging->debug('MSG', "found digest sha1");
+    }
+    if (!defined(CertNanny::Util->getDigests()->{willi})) {
+      CertNanny::Logging->debug('MSG', "not found digest willi");
+    }
 
     $self->{ITEMS} = ${$self->{CONFIG}->getRef("keystore", 'ref')};
     delete $self->{ITEMS}->{DEFAULT};
@@ -542,6 +549,7 @@ sub do_enroll {
           $entryname              = $args{ENROLLMENTNAME};
           $args{ENROLLMENT}       = clone($entry);
           $entry                  = $args{ENROLLMENT};
+          delete($entry->{statefile});
     
           # This is an enrollment keystore, set type, location and key parameters
           $entry->{initialenroll}->{activ} = '1';

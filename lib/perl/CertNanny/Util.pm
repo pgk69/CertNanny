@@ -34,12 +34,12 @@ use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION);
 use Exporter;
 
 @EXPORT = qw(runCommand isoDateToEpoch epochToIsoDate expandStr mangle
-             printableIsoDate readFile writeFile createSelfSign getCertSHA1
+             printableIsoDate readFile writeFile createSelfSign getCertDigest
              getCertFormat getCertInfoHash getCSRInfoHash parseCertData 
              getTmpFile forgetTmpFile wipe staticEngine encodeBMPString writeOpenSSLConfig 
              getDefaultOpenSSLConfig backoffTime getMacAddresses 
              fetchFileList callOpenSSL os_type is_os_type setVariable
-             unsetVariable osq dumpCertInfoHash Exit);    # Symbols to autoexport (:DEFAULT tag)
+             unsetVariable osq dumpCertInfoHash getDigests getCiphers Exit);    # Symbols to autoexport (:DEFAULT tag)
 
 # This variable stores arbitrary data like created temporary files
 my $INSTANCE;
@@ -611,9 +611,9 @@ sub createSelfSign {
     }
   }
 
-  # sanity check: DIGEST must be one of these: md5, sha1, md2, mdc2, md4
-  if (($digest ne 'md5') && ($digest ne 'sha1') && ($digest ne 'md2') && ($digest ne 'mdc2') && ($digest ne 'md4')) {
-    CertNanny::Logging->error('MSG', "DIGEST <$digest> must be one of these: md5, sha1, md2, mdc2, md4");
+  # sanity check: DIGEST must be one supported by the openssl Version
+  if (!defined(CertNanny::Util->getDigests()->{$digest})) {
+    CertNanny::Logging->error('MSG', "DIGEST <$digest> not supported by your version of openssl " . join(',', keys(%{CertNanny::Util->getDigests()})) . ")");
     return;
   }
 
@@ -692,6 +692,96 @@ sub getCertFormat {
 } ## end sub getCertFormat
 
 
+sub getDigests {
+  ###########################################################################
+  # Get availabe Digests
+  #
+  # Input:  -
+  # Output: Hashref to a hash with all possible digests as keys
+  #
+  my $self = (shift)->getInstance();
+  
+  return $self->{DIGESTS} if defined($self->{DIGESTS});
+  
+  my $rc;
+  
+  # build commandstring
+  my $openssl = $self->{CONFIG}->get('cmd.openssl', 'CMD');
+  
+  if (defined($openssl)) {
+    my @cmd = (CertNanny::Util->osq("$openssl"), 'list-message-digest-commands');
+
+    my $result = CertNanny::Util->runCommand(\@cmd);
+    
+    if (defined($result)) {
+      if ($result->{RC} != 0) {
+        CertNanny::Logging->error('MSG', "getDigests(): OpenSSL error $result->{RC}");
+      } else {
+        if (defined($result->{STDOUT})) {
+          my $digests = $result->{STDOUT};
+          chomp(@$digests);
+          foreach (@$digests) {
+            $rc->{$_} = 1;
+          }
+          $self->{DIGESTS} = $rc;
+        } else {
+          CertNanny::Logging->error('MSG', "getDigests(): Error executing OpenSSL");
+        }
+      }
+    } else {
+      CertNanny::Logging->error('MSG', "getDigests(): Error executing OpenSSL");
+    }
+  }
+  
+  return $rc;
+} ## end sub getDigests
+
+
+sub getCiphers {
+  ###########################################################################
+  # Get availabe Ciphers
+  #
+  # Input:  -
+  # Output: Hashref to a hash with all possible ciphers as keys
+  #
+  my $self = (shift)->getInstance();
+  
+  return $self->{CIPHERS} if defined($self->{CIPHERS});
+  
+  my $rc;
+  
+  # build commandstring
+  my $openssl = $self->{CONFIG}->get('cmd.openssl', 'CMD');
+  
+  if (defined($openssl)) {
+    my @cmd = (CertNanny::Util->osq("$openssl"), 'list-message-cipher-commands');
+
+    my $result = CertNanny::Util->runCommand(\@cmd);
+    
+    if (defined($result)) {
+      if ($result->{RC} != 0) {
+        CertNanny::Logging->error('MSG', "getCiphers(): OpenSSL error $result->{RC}");
+      } else {
+        if (defined($result->{STDOUT})) {
+          my $digests = $result->{STDOUT};
+          chomp(@$digests);
+          foreach (@$digests) {
+            $rc->{$_} = 1;
+          }
+          $self->{CIPHERS} = $rc;
+        } else {
+          CertNanny::Logging->error('MSG', "getCiphers(): Error executing OpenSSL");
+        }
+      }
+    } else {
+      CertNanny::Logging->error('MSG', "getCiphers(): Error executing OpenSSL");
+    }
+  }
+  
+  return $rc;
+} ## end sub getDigests
+
+
 sub callOpenSSL {
   # call openssl programm
   #
@@ -737,7 +827,7 @@ sub callOpenSSL {
   # build commandstring
   my $openssl = $self->{CONFIG}->get('cmd.openssl', 'CMD');
   
-  if (defined($openssl)){
+  if (defined($openssl)) {
     my @cmd = (CertNanny::Util->osq("$openssl"), $command);
     push(@cmd, ('-in', CertNanny::Util->osq("$args{CERTFILE}")))       if (defined $args{CERTFILE});
     push(@cmd, ('-inform', CertNanny::Util->osq("$args{CERTFORMAT}"))) if (defined $args{CERTFORMAT});
@@ -809,43 +899,45 @@ sub _sanityCheckIn {
 }
 
 
-sub _sha1_base64 {
+sub _digest_base64 {
   my $self = (shift)->getInstance();
-  my $data = shift;
-
-  my $sha;
+  my %args = (DIGEST  => 'sha1',
+              @_);                   # argument pair list
+ 
+  my $digest;
   my $tmpfile = CertNanny::Util->getTmpFile();
   if (CertNanny::Util->writeFile(DSTFILE    => $tmpfile,
-                                 SRCCONTENT => $data)) {
+                                 SRCCONTENT => $args{CERTDATA})) {
     my $openssl =$self->{CONFIG}->get('cmd.openssl', 'CMD');
     if (defined($openssl)) {
-      my @cmd = (CertNanny::Util->osq("$openssl"), 'dgst', '-sha', CertNanny::Util->osq("$tmpfile"));
-      chomp($sha = shift(@{CertNanny::Util->runCommand(\@cmd)->{STDOUT}}));
-      if ($sha =~ /^.*\)= (.*)$/) {
-        $sha = $1;
+      my @cmd = (CertNanny::Util->osq("$openssl"), 'dgst', '-' . $args{DIGEST}, CertNanny::Util->osq("$tmpfile"));
+      chomp($digest = shift(@{CertNanny::Util->runCommand(\@cmd)->{STDOUT}}));
+      if ($digest =~ /^.*\)= (.*)$/) {
+        $digest = $1;
       }
     }
     $self->forgetTmpFile('FILE', $tmpfile);
   }
 
-  return $sha;
+  return $digest;
 }
 
 
-sub getCertSHA1 {
+sub getCertDigest {
   ###########################################################################
   #
-  # Create DER SHA1 of a certificate
+  # Create DER Digest of a certificate
   # 
   # Input: caller must provide a hash ref:
   #   either  CERTDATA   => mandatory: directly contains certificate data
   #   or      CERTFILE   => mandatory: cert file to parse
   #           CERTFORMAT => optional: PEM|DER (default: PEM)
+  #           DIGEST     => optional: openssl digest (default: sha1)
   #
   # exacly one of CERTDATA or CERFILE mut be provided
   #
   # Output: caller gets a hash ref:
-  #           CERTSHA1   => String with SHA1 Hash of DER Certificate
+  #           CERTDIGEST => String with Digest Hash of DER Certificate
   #
   # Convert - if neccesary - to DER
   # Base64 Konvertierung
@@ -855,33 +947,41 @@ sub getCertSHA1 {
   
   my %args = (CERTFORMAT => 'PEM',
               OUTFORMAT  => 'DER',
+              DIGEST     => 'sha1',
               @_);                   # argument pair list
               
   my $rc;
              
-  my ($certType, $cert, $base64, $sha);
+  my ($certType, $cert, $base64, $digest);
   
-  if ($certType = $self->_sanityCheckIn('getCertSHA1', %args)) {
-    if (defined($self->{getCertSHA1}->{$args{$certType}})) {
-      $rc = {CERTSHA1 => $self->{getCertSHA1}->{$args{$certType}}};
+  # sanity check: DIGEST must be one supported by the openssl Version
+  if (!defined(CertNanny::Util->getDigests()->{$args{DIGEST}})) {
+    CertNanny::Logging->error('MSG', "DIGEST <$args{DIGEST}> not supported by your version of openssl " . join(',', keys(%{CertNanny::Util->getDigests()})) . ")");
+    return;
+  }
+
+  if ($certType = $self->_sanityCheckIn('getCertDigest', %args)) {
+    if (defined($self->{getCertDigest}->{$args{$certType}}->{$args{DIGEST}})) {
+      $rc = {CERTDIGEST => $self->{getCertDigest}->{$args{$certType}}->{$args{DIGEST}}};
     } else {
       if ($cert = CertNanny::Util->convertCert(%args)) {
-        if ($sha = $self->_sha1_base64($$cert{CERTDATA})) {
-          $rc = {CERTSHA1 => $sha};
-          $self->{getCertSHA1}->{$args{$certType}} = $sha;
+        if ($digest = $self->_digest_base64('CERTDATA', $$cert{CERTDATA},
+                                            'DIGEST'  , $args{DIGEST})) {
+          $rc = {CERTDIGEST => $digest};
+          $self->{getCertDigest}->{$args{$certType}}->{$args{DIGEST}} = $digest;
         }
       }
     }
   }
   if (defined($rc)) {
-    CertNanny::Logging->debug('MSG', "SHA1 calculated as <$rc->{CERTSHA1}>\n");
+    CertNanny::Logging->debug('MSG', "Digest calculated as <$rc->{CERTDIGEST}>\n");
   } else {
-    CertNanny::Logging->debug('MSG', "No SHA1 calculated\n");
+    CertNanny::Logging->debug('MSG', "No Digest calculated\n");
   } 
   
 
   return $rc;
-} ## end sub getCertSHA1
+} ## end sub getCertDigest
 
 
 sub getCertInfoHash {
@@ -920,6 +1020,7 @@ sub getCertInfoHash {
   #
   my $self = (shift)->getInstance();
   my %args = (CERTFORMAT => 'DER',
+              DIGEST     => 'sha1',
               @_);    # argument pair list
               
   my $rc;
@@ -937,7 +1038,7 @@ sub getCertInfoHash {
     my $command = 'x509';
     my @params  = ('text', 'subject', 'issuer', 'serial', 'email', 
                    'startdate', 'enddate', 
-                   'modulus', 'fingerprint', 'sha1', 'pubkey', 
+                   'modulus', 'fingerprint', $args{DIGEST}, 'pubkey', 
                    'purpose');
 
     if (defined($rc = CertNanny::Util->callOpenSSL($command, \@params, %args))) {

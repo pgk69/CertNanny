@@ -763,7 +763,7 @@ sub getInstalledCAs {
   
   if (!defined($args{TARGET}) or ($args{TARGET} eq 'LOCATION')) {
     if (defined(my $locName = CertNanny::Util->mangle($entry->{location}, 'FILE'))) {
-      my ($certRef, @certList, $certData, $certSha1, $certAlias, $certCreateDate, $certType, $certFingerprint);
+      my ($certRef, @certList, $certData, $certDigest, $certAlias, $certCreateDate, $certType, $certFingerprint);
       my @cmd = $self->_buildKeytoolCmd($locName, '-list');
       @certList = @{CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{STDOUT}};
       foreach (@certList) {
@@ -782,17 +782,17 @@ sub getInstalledCAs {
             my $certInfo = CertNanny::Util->getCertInfoHash(CERTDATA => $certData , CERTFORMAT => $certRef->{CERTFORMAT} );
             if (defined($certInfo) ) {
               if (my $certTyp = $self->k_getCertType(CERTINFO => $certInfo)) { 
-                $certSha1 = CertNanny::Util->getCertSHA1(%{$certRef});
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTALIAS}       = $certAlias;
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTCREATEDATE}  = $certCreateDate;
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTTYPE}        = $certType;
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTFINGERPRINT} = $certFingerprint;
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTDATA}        = $certData;
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTFORMAT}      = $certRef->{CERTFORMAT};
-                $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTINFO}        = $certInfo;
-                CertNanny::Logging->debug('MSG', "found installed root cert: ". $self->{$certTyp}->{$certSha1->{CERTSHA1}}->{CERTINFO}->{SubjectName}. " Fingerprint $certFingerprint" );
+                $certDigest = CertNanny::Util->getCertDigest(%{$certRef});
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTALIAS}       = $certAlias;
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTCREATEDATE}  = $certCreateDate;
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTTYPE}        = $certType;
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTFINGERPRINT} = $certFingerprint;
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTDATA}        = $certData;
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTFORMAT}      = $certRef->{CERTFORMAT};
+                $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTINFO}        = $certInfo;
+                CertNanny::Logging->debug('MSG', "found installed root cert: ". $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTINFO}->{SubjectName}. " Fingerprint $certFingerprint" );
                 if ($certTyp eq 'installedRootCAs') {
-                  $rc->{$certSha1->{CERTSHA1}} = $self->{$certTyp}->{$certSha1->{CERTSHA1}}
+                  $rc->{$certDigest->{CERTDIGEST}} = $self->{$certTyp}->{$certDigest->{CERTDIGEST}}
                 }
               }
             }
@@ -864,39 +864,39 @@ sub installRoots {
       $rc = 1 if (!$locName);
       if (!$rc) {
         # delete every root CA, that does not exist in $availableRootCAs from keystore
-        foreach my $certSHA1 (keys %{$installedRootCAs}) {
-          if (!exists($availableRootCAs->{$certSHA1}) && ($self->k_getCertType($installedRootCAs->{$certSHA1}) eq 'installedRootCAs')) {
-            CertNanny::Logging->debug('MSG', "Deleting root cert " . $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
-            @cmd =  (CertNanny::Util->osq("$options->{keytool}"), -noprompt, -storepass => CertNanny::Util->osq("$entry->{store}->{pin}"), '-keystore' ,CertNanny::Util->osq("$locName"), '-delete', '-alias', '"'.$installedRootCAs->{$certSHA1}->{CERTALIAS}.'"' );
+        foreach my $certDigest (keys %{$installedRootCAs}) {
+          if (!exists($availableRootCAs->{$certDigest}) && ($self->k_getCertType($installedRootCAs->{$certDigest}) eq 'installedRootCAs')) {
+            CertNanny::Logging->debug('MSG', "Deleting root cert " . $installedRootCAs->{$certDigest}->{CERTINFO}->{SubjectName});
+            @cmd =  (CertNanny::Util->osq("$options->{keytool}"), -noprompt, -storepass => CertNanny::Util->osq("$entry->{store}->{pin}"), '-keystore' ,CertNanny::Util->osq("$locName"), '-delete', '-alias', '"'.$installedRootCAs->{$certDigest}->{CERTALIAS}.'"' );
  
-            #@cmd = $self->_buildKeytoolCmd($locName, '-delete', '-alias', $installedRootCAs->{$certSHA1}->{CERTALIAS});
+            #@cmd = $self->_buildKeytoolCmd($locName, '-delete', '-alias', $installedRootCAs->{$certDigest}->{CERTALIAS});
             if (CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{RC}) {
-              CertNanny::Logging->error('MSG', "Error deleting root cert " . $installedRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+              CertNanny::Logging->error('MSG', "Error deleting root cert " . $installedRootCAs->{$certDigest}->{CERTINFO}->{SubjectName});
             }
           }
         }
 
         # copy every root CA, that does not exist in $installedRootCAs to keystore
-        foreach my $certSHA1 (keys %{$availableRootCAs}) {
-          if (!exists($installedRootCAs->{$certSHA1})) {
-            CertNanny::Logging->debug('MSG', "Importing root cert " . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+        foreach my $certDigest (keys %{$availableRootCAs}) {
+          if (!exists($installedRootCAs->{$certDigest})) {
+            CertNanny::Logging->debug('MSG', "Importing root cert " . $availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName});
             my $tmpFile = CertNanny::Util->getTmpFile();
             CertNanny::Util->writeFile(DSTFILE => $tmpFile,
-                                       SRCFILE => $availableRootCAs->{$certSHA1}->{CERTFILE});
+                                       SRCFILE => $availableRootCAs->{$certDigest}->{CERTFILE});
             my $alias = 'newRoot';
-            if ($availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName} =~ /CN=([^,]+).*/) {
+            if ($availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName} =~ /CN=([^,]+).*/) {
               ($alias = $1) =~ s/\s/_/g;
             }
             @cmd =  (CertNanny::Util->osq("$options->{keytool}"), -noprompt, -storepass => CertNanny::Util->osq("$entry->{store}->{pin}"),'-keystore' ,'"'.$locName.'"', '-importcert', '-file', '"'.$tmpFile.'"', '-trustcacerts', '-alias' , $alias);
             #@cmd = $self->_buildKeytoolCmd($locName, '-importcert', '-file', $tmpFile, '-trustcacerts', '-alias' , $alias );
             if (CertNanny::Util->runCommand(\@cmd, HIDEPWD => 1)->{RC}) {
-              CertNanny::Logging->error('MSG', "Error importing root cert " . $availableRootCAs->{$certSHA1}->{CERTINFO}->{SubjectName});
+              CertNanny::Logging->error('MSG', "Error importing root cert " . $availableRootCAs->{$certDigest}->{CERTINFO}->{SubjectName});
             }
             # collect Postinstallhook information
-            $self->{hook}->{Type}   .= 'FILE' . ','                                                               if (defined($self->{hook}->{Type})   && ($self->{hook}->{Type}   !~ m/FILE/s));
-            $self->{hook}->{File}   .= $availableRootCAs->{$certSHA1}->{CERTFILE} . ','                           if (defined($self->{hook}->{File})   && ($self->{hook}->{File}   !~ m/$availableRootCAs->{$certSHA1}->{CERTFILE}/s));
-            $self->{hook}->{FP}     .= $availableRootCAs->{$certSHA1}->{CERTINFO}->{CertificateFingerprint} . ',' if (defined($self->{hook}->{FP})     && ($self->{hook}->{FP}     !~ m/$availableRootCAs->{$certSHA1}->{CERTINFO}->{CertificateFingerprint}/s));
-            $self->{hook}->{Target} .= $entry->{location} . ','                                                   if (defined($self->{hook}->{Target}) && ($self->{hook}->{Target} !~ m/$entry->{location}/s));
+            $self->{hook}->{Type}   .= 'FILE' . ','                                                                 if (defined($self->{hook}->{Type})   && ($self->{hook}->{Type}   !~ m/FILE/s));
+            $self->{hook}->{File}   .= $availableRootCAs->{$certDigest}->{CERTFILE} . ','                           if (defined($self->{hook}->{File})   && ($self->{hook}->{File}   !~ m/$availableRootCAs->{$certDigest}->{CERTFILE}/s));
+            $self->{hook}->{FP}     .= $availableRootCAs->{$certDigest}->{CERTINFO}->{CertificateFingerprint} . ',' if (defined($self->{hook}->{FP})     && ($self->{hook}->{FP}     !~ m/$availableRootCAs->{$certDigest}->{CERTINFO}->{CertificateFingerprint}/s));
+            $self->{hook}->{Target} .= $entry->{location} . ','                                                     if (defined($self->{hook}->{Target}) && ($self->{hook}->{Target} !~ m/$entry->{location}/s));
           }
         }
 
