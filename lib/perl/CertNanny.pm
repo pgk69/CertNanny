@@ -85,17 +85,9 @@ sub new {
     }
     $self->{OPENSSL_DIGEST} = 'sha1';
     if ($self->{CONFIG}->get("cmd.openssldigest")) {
-      $self->{OPENSSL_DIGEST} = $self->{CONFIG}->get("cmd.opensslconf");
+      $self->{OPENSSL_DIGEST} = $self->{CONFIG}->get("cmd.openssldigest");
     }
     CertNanny::Logging->debug('MSG', "set default Digest to: <" . $self->{OPENSSL_DIGEST} . ">");
-
-    my $dig = CertNanny::Util->getDigests();
-    if (defined(CertNanny::Util->getDigests()->{sha1})) {
-      CertNanny::Logging->debug('MSG', "found digest sha1");
-    }
-    if (!defined(CertNanny::Util->getDigests()->{willi})) {
-      CertNanny::Logging->debug('MSG', "not found digest willi");
-    }
 
     $self->{ITEMS} = ${$self->{CONFIG}->getRef("keystore", 'ref')};
     delete $self->{ITEMS}->{DEFAULT};
@@ -538,7 +530,7 @@ sub do_enroll {
           CertNanny::Logging->info('MSG', "Keystore <$entryname>: Found initial enrollment configuration for " . $self->{ITEMS}->{$entryname}->{initialenroll}->{subject});
           if (($args{METHODE} eq 'password') || ($args{METHODE} eq 'anonymous')) {
             # create selfsigned certificate
-            my $selfsigned = CertNanny::Util->createSelfSign('DIGEST'    => $self->{OPENSSL_DIGEST},
+            my $selfsigned = CertNanny::Util->createSelfSign('DIGEST'    => $entry->{digest} || $self->{OPENSSL_DIGEST} || 'sha1',
                                                              'ENTRY'     => $entry,
                                                              'ENTRYNAME' => $entryname);
             $args{CERTFILE} = $selfsigned->{CERT};

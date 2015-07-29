@@ -336,8 +336,8 @@ sub _print {
   # SYSLOG:ERROR my $dbg       = 3;
   my $buffer;
   
-  my $myFile     = defined($self->{CONFIG}) ? CertNanny::Util->expandStr($self->{CONFIG}->get('log.'.lc($target).'.file', "FILE"), %args)     :  undef;
-  my $myLastFile = defined($self->{CONFIG}) ? CertNanny::Util->expandStr($self->{CONFIG}->get('log.'.lc($target).'.filelast', "FILE"), %args) :  undef;
+  my $myFile     = defined($self->{CONFIG}) ? CertNanny::Util->expandStr('INPUT', $self->{CONFIG}->get('log.'.lc($target).'.file', "FILE") || undef, %args)     :  undef;
+  my $myLastFile = defined($self->{CONFIG}) ? CertNanny::Util->expandStr('INPUT', $self->{CONFIG}->get('log.'.lc($target).'.filelast', "FILE") || undef, %args) :  undef;
 
   my $fileTarget     = $logTarget{$target.'file'} && defined($args{PRIO}) && defined($myFile) && ($myFile ne '');
   my $lastFileTarget = $logTarget{$target.'file'} && defined($args{PRIO}) && defined($myLastFile) && ($myLastFile ne '');
@@ -457,7 +457,7 @@ sub _print {
       
       # Log to syslog
       if ($sysLogTarget && ($dbg <= $self->logLevel('TARGET', 'syslog'))) {
-        my $syslogIdentifier = CertNanny::Util->expandStr($self->{OPTIONS}->{SYSLOG}->{$target}->{IDENTIFIER});
+        my $syslogIdentifier = CertNanny::Util->expandStr('INPUT', $self->{OPTIONS}->{SYSLOG}->{$target}->{IDENTIFIER} || undef);
         my $syslogOptions    = $self->{OPTIONS}->{SYSLOG}->{$target}->{OPTIONS};
         my $syslogFacilities = $self->{OPTIONS}->{SYSLOG}->{$target}->{FACILITIES};
         if ($syslogIdentifier ne '') {
@@ -497,13 +497,13 @@ sub _log {
       }
     }
     $subroutine = "[$subroutine] " if ($subroutine);
-    $logStr = CertNanny::Util->expandStr("__YEAR__-__MONTH__-__DAY__ __HOUR__:__MINUTE__:__SECOND__ : [__PRIO__] [__PID__] __SUB____MSG__\n", 
+    $logStr = CertNanny::Util->expandStr('INPUT',    "__YEAR__-__MONTH__-__DAY__ __HOUR__:__MINUTE__:__SECOND__ : [__PRIO__] [__PID__] __SUB____MSG__\n", 
                                          '__PRIO__', lc($args{PRIO} || "info"),
                                          '__SUB__',  $subroutine,
                                          '__MSG__',  $args{MSG});
   } else {
     # It's a normal output message, so we just make an expandStr
-    $logStr = defined($args{MSG}) ? CertNanny::Util->expandStr($args{MSG}) : defined($args{STR}) ? $args{STR} : '';
+    $logStr = defined($args{MSG}) ? CertNanny::Util->expandStr('INPUT', $args{MSG} || undef) : defined($args{STR}) ? $args{STR} : '';
   }
   
   $self->_print('STR', $logStr,

@@ -1011,7 +1011,7 @@ sub k_renew {
         $self->_renewalState() eq "keygenerated") {
       CertNanny::Logging->info('MSG', "State: initial");
 
-      $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST} = $self->createRequest('DIGEST', 'sha1');
+      $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST} = $self->createRequest('DIGEST', $self->{OPTIONS}->{ENTRY}->{digest} || $self->{OPENSSL_DIGEST} || 'sha1');
       if (defined $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}) {
         $self->_renewalState("sendrequest");
         $rc = 1;
@@ -1823,7 +1823,7 @@ sub k_executeHook {
     }
 
     # replace val
-    $hook = CertNanny::Util->expandStr($hook, %args);
+    $hook = CertNanny::Util->expandStr('INPUT', $hook || undef, %args);
     # foreach my $key (keys %args) {
     #   my $value = $args{$key} || "";
     #   $hook =~ s/$key/$value/g;
@@ -2220,10 +2220,10 @@ sub k_getEnroller {
       CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get enroller");
       return;
     }
-    CertNanny::Logging->error('MSG', "k_getEnroller: $enrollerclass successfuly instantiated.");
+    CertNanny::Logging->debug('MSG', "k_getEnroller: $enrollerclass successfuly instantiated.");
   } ## end unless (defined($entry->{ENROLLER}))
 
-  CertNanny::Logging->error('MSG', "k_getEnroller: Using enroller $enrollerclass");
+  CertNanny::Logging->debug('MSG', "k_getEnroller: Using enroller $enrollerclass");
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " get enroller");
   return $entry->{ENROLLER};
 } ## end sub k_getEnroller

@@ -262,46 +262,45 @@ sub epochToIsoDate {
 sub expandStr {
   #################################################################
   # Expands a string by replacing placeholders with values
+  # Input: Hash array containing the inputstring and userdefined 
+  #        values to be replaced
+  #  INPUT             : Inputstring
+  #  __<replacename>__ : <replacevalue>
   #
-  #  __YEAR__       : Year        4-digit
-  #  __YY__         : Year        2-digit
-  #  __MONTH__      : Monthnumber 2-digit
-  #  __DAY__        : daynumber   2-digit
-  #  __HOUR__       : Hour        2-digit 24h-format
-  #  __MINUTE__     : Minute      3-digit
-  #  __SECOND__     : Second      2-digit
-  #  __TS4__        : Timestamp format JJJJMMTT_hhmmss
-  #  __TS2__        : Timestamp format JJMMTT_hhmmss
+  # Custom replace values may contain a sprintf format string
   #
-  #  __PID__        : Prozess-Id
-  #  __PRG__        : Program name
-  #  __PRGEXT__     : Program name with extension
-  #  __EXT__        : Program name extension only
+  # The following varibles are predefined and must not be used
+  # as custom variables:
+  #  __YEAR__          : Year        4-digit
+  #  __YY__            : Year        2-digit
+  #  __MONTH__         : Monthnumber 2-digit
+  #  __DAY__           : daynumber   2-digit
+  #  __HOUR__          : Hour        2-digit 24h-format
+  #  __MINUTE__        : Minute      3-digit
+  #  __SECOND__        : Second      2-digit
+  #  __TS4__           : Timestamp format JJJJMMTT_hhmmss
+  #  __TS2__           : Timestamp format JJMMTT_hhmmss
   #
-  #  __\##__        : Char(##)
+  #  __PID__           : Prozess-Id
+  #  __PRG__           : Program name
+  #  __PRGEXT__        : Program name with extension
+  #  __EXT__           : Program name extension only
   #
-  #  __ENV(var)__   : Environment variable var
-  #  __EXEC(prg)__  : Output of program prg
+  #  __\##__           : Char(##)
   #
-  #  __BIN__        : $Bin
-  #  __SCRIPT__     : $Script
-  #  __REALBIN__    : $Bin $RealBin
-  #  __REALSCRIPT__ : $RealScript
+  #  __ENV(var)__      : Environment variable var
+  #  __EXEC(prg)__     : Output of program prg
   #
-  #  Beliebige weitere Werte koennen uebergeben werden in der Form
-  #  Name|Inhalt|Name|Inhalt|Name|Inhalt....
-  #  Bei der Referenzierung im String koennen diese benutzerdefinierten Variablen in sprintf-Manier
-  #  formatiert werden. Dazu ist an den Variablennamen durch % getrennt der formatstring anzuhaengen
-  #
-  #  Bsp.
-  #  Aufruf: extendString("MT940.$MANDANT%03s$.$TEST$.$JAHR$$MONAT$$TAG$.$STUNDE$$MINUTE$$SEKUNDE$", "MANDANT|1|TEST|234234")
-  #
-  #  Ausgabe (um 13:51:30 am 1.8.2010): MT940.001.234234.20100801.135130
+  #  __BIN__           : $Bin
+  #  __SCRIPT__        : $Script
+  #  __REALBIN__       : $Bin $RealBin
+  #  __REALSCRIPT__    : $RealScript
   #
 
   my $self   = (shift)->getInstance();
-  my $input  = shift || '';
   my %args   = (@_);
+  
+  my $input  = $args{INPUT} || '';
   
   # Replace HEX values, Environment Variables and Program Outputs
   $input =~ s:__\\x([0-9A-Fa-f]{2})__:chr hex $1:ge;

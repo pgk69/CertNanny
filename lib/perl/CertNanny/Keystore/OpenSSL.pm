@@ -167,13 +167,13 @@ sub new {
     # RETRIEVE AND STORE STATE
     # get previous renewal status and check if we can write to the file
     if (!defined($self->k_retrieveState()) || !defined($self->k_storeState())) {
-      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating MQ keystore <$args{ENTRYNAME}>.");
+      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating OpenSSL keystore <$args{ENTRYNAME}>.");
       return;
     }
   } #location root only 
 
   # return new keystore object
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating MQ keystore <$args{ENTRYNAME}>.");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " instantiating OpenSSL keystore <$args{ENTRYNAME}>.");
     
   return $self;
 } ## end sub new
