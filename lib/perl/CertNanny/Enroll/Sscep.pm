@@ -249,7 +249,8 @@ sub getCA {
     CertNanny::Logging->debug('MSG', "Requesting CA certificates");
 
     $self->writeConfigFile();
-    my @cmd = (CertNanny::Util->osq("$self->{cmd}"), "getca", '-F sha1', '-f', CertNanny::Util->osq("$self->{config_filename}"));
+    my $digest = $self->{OPTIONS}->{sscep}->{digest} || 'sha1';
+    my @cmd = (CertNanny::Util->osq("$self->{cmd}"), "getca", '-F '.$digest, '-f', CertNanny::Util->osq("$self->{config_filename}"));
     my $result = CertNanny::Util->runCommand(\@cmd);
     %sscepInfo = $self->getSscepInfo('RESULT', $result);
     if ($result->{RC} != 0) {return undef}
@@ -325,7 +326,8 @@ sub getNextCA {
 
   $self->writeConfigFile();
 
-  my @cmd = (CertNanny::Util->osq("$self->{cmd}"), "getnextca", '-F sha1', '-f', CertNanny::Util->osq("$self->{config_filename}"));
+  my $digest = $self->{OPTIONS}->{sscep}->{digest} || 'sha1';
+  my @cmd = (CertNanny::Util->osq("$self->{cmd}"), "getnextca", '-F '.$digest, '-f', CertNanny::Util->osq("$self->{config_filename}"));
   my $result = CertNanny::Util->runCommand(\@cmd);
   %sscepInfo = $self->getSscepInfo('RESULT', $result);
   if ($result->{RC} != 0) {
