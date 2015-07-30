@@ -1553,57 +1553,64 @@ sub k_buildCertificateChain {
 
   CertNanny::Logging->debug('MSG', "Building certificate chain");
   my ($issuer_found, $subject, $currentcert);
+  
+  # start build process with the end entity certificate
   my @chain = ($cert);
   BUILDCHAIN:
   while (1) {
-    ### check if the first cert in the chain is a root certificate...
+    # end build process with the root certificate
     last BUILDCHAIN if &$is_issuer($chain[0], $chain[0]);
 
+    $currentcert  = undef;
     $issuer_found = 0;
     $subject      = $chain[0]->{CERTINFO}->{SubjectName};
     CertNanny::Logging->debug('MSG', "Subject: $subject");
 
     FINDISSUER:
-    foreach $currentcert (@cacerts, @trustedroots) {
-      if (!defined $currentcert) {
-        ### undefined $currentcert - should not happen...
-      }
-
-      ### scanning ca currentcert...
-      $subject = $currentcert->{CERTINFO}->{SubjectName};
-      if ($issuer_found = &$is_issuer($currentcert, $chain[0])) {
-        my $match = ($issuer_found == 1) ? 'AuthKeyID' : 'DN';
-        CertNanny::Logging->debug('MSG', "  Issuer identified via $match match: $subject");
-        last FINDISSUER;
-      } else {
-        CertNanny::Logging->debug('MSG', "  Unrelated: $subject");
+    foreach my $item (@cacerts, @trustedroots) {
+      $currentcert = $item;
+      if (defined $item) {
+        ### scanning ca $item...
+        $subject = $item->{CERTINFO}->{SubjectName};
+        if ($issuer_found = &$is_issuer($item, $chain[0])) {
+          my $match = ($issuer_found == 1) ? 'AuthKeyID' : 'DN';
+          CertNanny::Logging->debug('MSG', "  Issuer identified via $match match: $subject");
+          last FINDISSUER;
+        } else {
+          CertNanny::Logging->debug('MSG', "  Unrelated: $subject");
+        }
       }
     } ## end FINDISSUER: foreach $currentcert (@cacerts...)
 
     if (!$issuer_found) {
+      # chain is broken, so return without result
       CertNanny::Logging->error('MSG', "No matching issuer certificate was found");
       CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " build a certificate chain for the specified certificate");
       return undef;
     }
-    unshift @chain, $currentcert if (defined $currentcert); ### prepend to chain...
+    unshift @chain, $currentcert if (defined($currentcert)); ### prepend to chain...
   } ## end BUILDCHAIN: while (1)
 
   # remove end entity certificate
   pop @chain;
 
-  # verify that the first certificate in the chain is a trusted root
+  # sanity checks
+  # check, whether there is a chain at all
   if (scalar @chain == 0) {
     CertNanny::Logging->error('MSG', "Certificate chain could not be built");
     CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " build a certificate chain for the specified certificate");
     return undef;
   }
 
+  # verify that the first certificate in the chain is a trusted root
   if (!exists $rootcertfingerprint{$chain[0]->{CERTINFO}->{CertificateFingerprint}}) {
     CertNanny::Logging->error('MSG', "Root certificate is not trusted");
     CertNanny::Logging->error('MSG', "Untrusted root certificate DN: " . $chain[0]->{CERTINFO}->{SubjectName});
     CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " build a certificate chain for the specified certificate");
     return undef;
   }
+  
+  # everythings fine return the chain
   CertNanny::Logging->debug('MSG', "Root certificate is marked as trusted in configuration");
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " build a certificate chain for the specified certificate");
 
@@ -2004,10 +2011,10 @@ sub _sendRequest_initialEnrollment {
   my $rc;
   CertNanny::Logging->debug('MSG', "Install cert in initial enrollment.");
 
-  my $keystore     = $config->{CONFIG}->{keystore}->{$entryname};
-  my $keystoretype = $entry->{initialenroll}->{target}->{type};
+  my $keystore                               = $config->{CONFIG}->{keystore}->{$entryname};
+  my $keystoretype                           = $entry->{type};
   $entry->{location}                         = $keystore->{location};
-  $entry->{initialenroll}->{target}->{pin} ||= $keystore->{key}->{pin};
+  $entry->{initialenroll}->{target}->{pin} ||= $entry->{key}->{pin};
 
   my @cachain;
   push(@cachain, @{$self->{STATE}->{DATA}->{ROOTCACERTS}});
@@ -2025,7 +2032,7 @@ sub _sendRequest_initialEnrollment {
                                                   CERTFORMAT   => 'PEM',
                                                   CERTFILE     => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE},
                                                   EXPORTPIN    => $entry->{initialenroll}->{target}->{pin},
-                                                  PIN          => $keystore->{key}->{pin}))) {
+                                                  PIN          => $entry->{key}->{pin}))) {
     $p12File = $exportp12->{FILENAME};
     CertNanny::Logging->debug('MSG', "Created importp12 file <$exportp12->{FILENAME}> for target keystore type: $keystoretype");
   } else {
