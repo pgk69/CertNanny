@@ -546,6 +546,7 @@ sub do_enroll {
           # This is an enrollment keystore, set type, location and key parameters
           $entry->{initialenroll}->{activ} = '1';
           $entry->{type}                   = 'OpenSSL';
+          $entry->{orglocation}            = $entry->{location};
           $entry->{location}               = $self->_enroll_location(%args);
           $entry->{key}->{format}          = 'PEM';
           $entry->{key}->{file}            = $self->_enroll_file(%args);

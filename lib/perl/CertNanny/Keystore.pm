@@ -2013,7 +2013,7 @@ sub _sendRequest_initialEnrollment {
 
   my $keystore                               = $config->{CONFIG}->{keystore}->{$entryname};
   my $keystoretype                           = $entry->{type};
-  $entry->{location}                         = $keystore->{location};
+  $entry->{location}                         = $entry->{orglocation};
   $entry->{initialenroll}->{target}->{pin} ||= $entry->{key}->{pin};
 
   my @cachain;
