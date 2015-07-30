@@ -2011,10 +2011,9 @@ sub _sendRequest_initialEnrollment {
   my $rc;
   CertNanny::Logging->debug('MSG', "Install cert in initial enrollment.");
 
-  my $keystore                               = $config->{CONFIG}->{keystore}->{$entryname};
-  my $keystoretype                           = $entry->{type};
-  $entry->{location}                         = $entry->{orglocation};
-  $entry->{initialenroll}->{target}->{pin} ||= $entry->{key}->{pin};
+  my $keystoretype                 = $entry->{target}->{type};
+  $entry->{location}               = $entry->{target}->{location};
+  $entry->{target}->{key}->{pin} ||= $entry->{key}->{pin};
 
   my @cachain;
   push(@cachain, @{$self->{STATE}->{DATA}->{ROOTCACERTS}});
@@ -2031,7 +2030,7 @@ sub _sendRequest_initialEnrollment {
                                                   KEYFILE      => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{KEYFILE},
                                                   CERTFORMAT   => 'PEM',
                                                   CERTFILE     => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE},
-                                                  EXPORTPIN    => $entry->{initialenroll}->{target}->{pin},
+                                                  EXPORTPIN    => $entry->{target}->{key}->{pin},
                                                   PIN          => $entry->{key}->{pin}))) {
     $p12File = $exportp12->{FILENAME};
     CertNanny::Logging->debug('MSG', "Created importp12 file <$exportp12->{FILENAME}> for target keystore type: $keystoretype");
@@ -2050,18 +2049,37 @@ sub _sendRequest_initialEnrollment {
   }
 
   CertNanny::Logging->debug('MSG', "Importing p12 <$p12File> into the final location.");
-  my %p12args = (FILE      => $p12File,
-                 PIN       => $entry->{initialenroll}->{target}->{pin},
-                 ENTRYNAME => $entryname,
-                 ENTRY     => $entry,
-                 CONF      => $config);
-  eval "CertNanny::Keystore::${keystoretype}::importP12(%p12args)";
-  if ($@) {
+  # we need a keystore handler for calling the keystroe specific importP12
+  my $handler;
+  eval "\$handler = new CertNanny::Keystore::$keystoretype(\%{\$entry->{target}->{args}})";
+  if (!ref($handler)) {
+    CertNanny::Logging->error('MSG', "Could not initialize keystore handler '$keystoretype' for keystore '$entryname': $handler");
+    return;
+  }
+  
+  if ($handler->importP12(FILE      => $p12File,
+                          PIN       => $entry->{target}->{key}->{pin},
+                          ENTRYNAME => $entryname,
+                          ENTRY     => $entry,
+                          CONF      => $config)) {
     CertNanny::Logging->error('MSG', "Could not execute $keystoretype keystore importP12 function. Aborted. $@");
     return;
     # croak "Could not execute $target keystore importP12 function. Aborted. $@";
     # $rc = 0;
   }
+
+#  my %p12args = (FILE      => $p12File,
+#                 PIN       => $entry->{target}->{key}->{pin},
+#                 ENTRYNAME => $entryname,
+#                 ENTRY     => $entry,
+#                 CONF      => $config);
+#  eval "CertNanny::Keystore::${keystoretype}::importP12(%p12args)";
+#  if ($@) {
+#    CertNanny::Logging->error('MSG', "Could not execute $keystoretype keystore importP12 function. Aborted. $@");
+#    return;
+#    # croak "Could not execute $target keystore importP12 function. Aborted. $@";
+#    # $rc = 0;
+#  }
 
   CertNanny::Logging->debug('MSG', "P12 creation and import of <$p12File> completed. Clean up after initial enrollment and p12 import.");
   if ($entry->{initialenroll}->{auth}->{mode} eq "password" or
