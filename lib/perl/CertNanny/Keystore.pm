@@ -1026,7 +1026,15 @@ sub k_renew {
         $self->_renewalState("completed");
         $rc = 1;
       } else {
-        CertNanny::Logging->error('MSG', "Could not send request");
+        my $mode;
+        if ($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} > 1) {
+          $mode = $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}-1;
+          $mode = "I try at next progam call ($mode tries left).";
+        } else {
+          $mode = "I give up and cleanup";
+        }
+        $mode = "I try at next progam call." if ($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} == -1);
+        CertNanny::Logging->error('MSG', "Could not complete sendrequest. $mode");
         $self->k_checkclearState(0);
       }
     } elsif ($self->_renewalState() eq "completed") {
@@ -1518,15 +1526,8 @@ sub k_buildCertificateChain {
     $parent_subject = $parent->{CERTINFO}->{SubjectName};
     $parent_skeyid  = $parent->{CERTINFO}->{SubjectKeyIdentifier};
 
-    if (defined $child_akeyid) {                                                  ### keyid chaining...
-      if (defined $parent_skeyid && 'keyid:' . $parent_skeyid eq $child_akeyid) { ### MATCHED via keyid...
-        return 1;
-      }
-    } else {                                                                      ### DN chaining...
-      if ($child_issuer eq $parent_subject) {                                     ### MATCHED via DN...
-        return 2;
-      }
-    }
+    return 1 if (defined $child_akeyid && defined $parent_skeyid && 'keyid:' . $parent_skeyid eq $child_akeyid); ### MATCHED via keyid...
+    return 2 if (!defined $child_akeyid && ($child_issuer eq $parent_subject));                                  ### MATCHED via DN...
     return undef;
   };
 
@@ -1536,7 +1537,7 @@ sub k_buildCertificateChain {
   my %rootcertfingerprint;
   foreach my $entry (@trustedroots) {
     $rootcertfingerprint{$entry->{CERTINFO}->{CertificateFingerprint}}++;
-    CertNanny::Logging->debug('MSG', "Authoritative Root CA found:".$entry->{CERTINFO}->{SubjectName}." - ".$entry->{CERTINFO}->{CertificateFingerprint} );
+    CertNanny::Logging->debug('MSG', "Authoritative Root CA found: Fingerprint: " . $entry->{CERTINFO}->{CertificateFingerprint} . " Subject Name:" . $entry->{CERTINFO}->{SubjectName});
   }
 
   # remove root certs from certificate list
@@ -1548,76 +1549,47 @@ sub k_buildCertificateChain {
   # the config file!
 
   # output structure, for building the chain start with the end entity cert
-  if (!defined($cert->{CERTINFO})) {
-    my $certInfo = CertNanny::Util->getCertInfoHash(%$cert);
-    $cert->{CERTINFO} = $certInfo;
-  }
-  my @chain = ($cert);
+  $cert->{CERTINFO} = CertNanny::Util->getCertInfoHash(%$cert);
 
   CertNanny::Logging->debug('MSG', "Building certificate chain");
-BUILDCHAIN:
+  my ($issuer_found, $subject, $currentcert);
+  my @chain = ($cert);
+  BUILDCHAIN:
   while (1) {
     ### check if the first cert in the chain is a root certificate...
-    if (&$is_issuer($chain[0], $chain[0])) {
-      ### found root certificate...
-      last BUILDCHAIN;
-    }
+    last BUILDCHAIN if &$is_issuer($chain[0], $chain[0]);
 
-    my $cert;
-    my $issuer_found = 0;
-    my $subject      = $chain[0]->{CERTINFO}->{SubjectName};
+    $issuer_found = 0;
+    $subject      = $chain[0]->{CERTINFO}->{SubjectName};
     CertNanny::Logging->debug('MSG', "Subject: $subject");
 
-  FINDISSUER:
-    foreach my $entry (@cacerts, @trustedroots) {
-      # work around a bug in Perl (?): when using $cert instead of
-      # $entry in the foreach loop the value of $cert was lost
-      # after leaving the loop!?
-      $cert = $entry;
-      if (!defined $entry) {
-        ### undefined entry 1 - should not happen...
-      }
-      ### scanning ca entry...
-      ### $entry->{CERTINFO}->{SubjectName}
-      ### $chain[0]
-
-      $issuer_found = &$is_issuer($entry, $chain[0]);
-      if (!defined $entry) {
-        ### undefined entry 2 - should not happen...
+    FINDISSUER:
+    foreach $currentcert (@cacerts, @trustedroots) {
+      if (!defined $currentcert) {
+        ### undefined $currentcert - should not happen...
       }
 
-      $subject = $entry->{CERTINFO}->{SubjectName};
-      if ($issuer_found) {
-        if ($issuer_found == 1) {
-          CertNanny::Logging->debug('MSG', "  Issuer identified via AuthKeyID match: $subject");
-        } else {
-          CertNanny::Logging->debug('MSG', "  Issuer identified via DN match: $subject");
-        }
+      ### scanning ca currentcert...
+      $subject = $currentcert->{CERTINFO}->{SubjectName};
+      if ($issuer_found = &$is_issuer($currentcert, $chain[0])) {
+        my $match = ($issuer_found == 1) ? 'AuthKeyID' : 'DN';
+        CertNanny::Logging->debug('MSG', "  Issuer identified via $match match: $subject");
+        last FINDISSUER;
       } else {
         CertNanny::Logging->debug('MSG', "  Unrelated: $subject");
       }
-
-      last FINDISSUER if ($issuer_found);
-    } ## end FINDISSUER: foreach my $entry (@cacerts...)
+    } ## end FINDISSUER: foreach $currentcert (@cacerts...)
 
     if (!$issuer_found) {
       CertNanny::Logging->error('MSG', "No matching issuer certificate was found");
       CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " build a certificate chain for the specified certificate");
       return undef;
     }
-    if (!defined $cert) {
-      ### undefined entry 3 - should not happen...
-    }
-
-    ### prepend to chain...
-    ### $cert
-    unshift @chain, $cert;
+    unshift @chain, $currentcert if (defined $currentcert); ### prepend to chain...
   } ## end BUILDCHAIN: while (1)
 
   # remove end entity certificate
   pop @chain;
-
-  ### @chain
 
   # verify that the first certificate in the chain is a trusted root
   if (scalar @chain == 0) {
@@ -2151,7 +2123,7 @@ sub _sendRequest {
         $self->k_executeHook($entry->{hook}->{renewal}->{install}->{pre});
 
         if (defined($entry->{initialenroll}->{activ})) {
-          $rc = self->_sendRequest_initialEnrollment();
+          $rc = $self->_sendRequest_initialEnrollment();
         } else {
           $rc = $self->installCert(CERTFILE   => $newcertfile,
                                    CERTFORMAT => 'PEM') || 0;

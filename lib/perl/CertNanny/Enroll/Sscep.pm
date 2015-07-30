@@ -162,7 +162,6 @@ sub enroll {
     $self->writeConfigFile();
     my @cmd = (CertNanny::Util->osq("$self->{cmd}"), "enroll", '-f', CertNanny::Util->osq("$self->{config_filename}"));
     my $result = CertNanny::Util->runCommand(\@cmd);
-    # $rc = $self->("enroll");
     %sscepInfo = $self->getSscepInfo('RESULT', $result);
     eval {alarm 0};                            # eval not supported in perl 5.7.1 on win32
     CertNanny::Logging->info('MSG', "Return code: $sscepInfo{RC}");
