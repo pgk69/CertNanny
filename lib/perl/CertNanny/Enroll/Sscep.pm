@@ -57,8 +57,8 @@ sub new {
     CertNanny::Logging->error('MSG', "scepcertdir not specified for keystore");
     return undef;
   }
-  $self->{entryname}       = $entryname;
-  $self->{cmd}             = $config->get('cmd.sscep', 'CMD');
+  $self->{entryname} = $entryname;
+  $self->{cmd}       = $config->get('cmd.sscep', 'CMD');
   if (defined($self->{cmd})) {
     $self->{config_filename} = File::Spec->catfile($self->{certdir}, $self->{entryname} . "_sscep.cnf");
 

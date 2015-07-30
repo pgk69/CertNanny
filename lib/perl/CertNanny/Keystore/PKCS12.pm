@@ -127,7 +127,7 @@ sub getCert {
   my $rc = undef;
 
   if (!defined $args{CERTFILE} && !defined $args{CERTDATA}) {
-    $args{CERTFILE} = CertNanny::Util->mangle($entry->{location}, 'FILE')
+    $args{CERTFILE} = CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE')
   }
   
   if (defined $args{CERTFILE} && defined $args{CERTDATA}) {
@@ -384,29 +384,24 @@ sub importP12 {
   #   my $self = shift;
   #   return $self->SUPER::importP12(@_) if $self->can("SUPER::importP12");
   # }
-  #my $self = shift;
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " import pkcs12 file");
+  my $self = shift;
   my %args = (@_);    # argument pair list
 
-  my $entry     = $args{ENTRY};
-  my $config    =  $args{CONFIG};
-  #CertNanny::Logging->debug('MSG',  "import pkcs12 file entry". Dumper($entry));
+  my $rc = 1;
+
+  my $entry = $args{ENTRY};
  
-  my $origin = File::Spec->canonpath($args{FILE}); 
-  my $dest = File::Spec->canonpath($entry->{initialenroll}->{target}->{location});
-  CertNanny::Logging->debug('MSG', "origin: $origin dest: $dest ");
-  
-  if(! copy($origin,$dest)){
-  	 CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILE} ");
-#  if (!CertNanny::Util->writeFile(DSTFILE    => $entry->{initialenroll}->{target}->{location},
-#                                 SRCFILE => $args{FILE} ,
-#                                  FORCE      => 0)) {
-#    CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILE} ");
-    CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " import pkcs12 file");
-    return undef;
+  CertNanny::Logging->debug('MSG', "importing new P12 file <$args{FILE}> to <$entry->{location}>");
+  if (!CertNanny::Util->writeFile(SRCFILE => $args{FILE},
+                                  DSTFILE => $entry->{location},
+                                  FORCE   => 1)) {
+    CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILE} ");
+    $rc = undef;
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " import pkcs12 file");
-  return 1;
+  return $rc;
 } ## end sub importP12
 
 
@@ -463,7 +458,7 @@ sub getInstalledCAs {
 
   # get root certs from LOCATION
   my ($certRef, $certData, $certDigest);
-  $certRef = $self->getCert(CERTFILE => CertNanny::Util->mangle($entry->{location}, 'FILE'),
+  $certRef = $self->getCert(CERTFILE => CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE'),
                             CERTTYPE => 'CA');
   while ($certRef and ($certData = $certRef->{CERTDATA})) {
     my $certInfo = CertNanny::Util->getCertInfoHash(CERTDATA   => $certData,
@@ -471,7 +466,7 @@ sub getInstalledCAs {
     if (defined($certInfo)) {
       if (my $certTyp = $self->k_getCertType(CERTINFO => $certInfo)) {
         $certDigest = CertNanny::Util->getCertDigest(%{$certRef});
-        $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTFILE} = CertNanny::Util->mangle($entry->{location}, 'FILE');
+        $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTFILE} = CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE');
         $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTDATA} = $certData;
         $self->{$certTyp}->{$certDigest->{CERTDIGEST}}->{CERTINFO} = $certInfo;
         if ($certTyp eq 'installedRootCAs') {
@@ -533,18 +528,18 @@ sub installRoots {
     my $installedRootCAs = $self->k_getAvailableRootCAs();
 
     if (!defined($installedRootCAs)) {
-      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . CertNanny::Util->mangle($entry->{TrustedRootCA}->{AUTHORITATIVE}->{Directory}, 'FILE'));
+      $rc = !CertNanny::Logging->error('MSG', "No root certificates found in " . CertNanny::Util->mangle(VALUE => $entry->{TrustedRootCA}->{AUTHORITATIVE}->{Directory}, MANGLE => 'FILE'));
     } else {
       # If this is ok, let's get the privat key
       my $myKey = $self->getKey();
       my $EECert;
       if (!defined($myKey)) {
-        $rc = !CertNanny::Logging->error('MSG', "No private key found in " . CertNanny::Util->mangle($entry->{location}, 'FILE'));
+        $rc = !CertNanny::Logging->error('MSG', "No private key found in " . CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE'));
       } else {
         # now let's get the certificate
         $EECert = $self->getCert(CERTTYPE => 'EE');
         if (!defined($EECert)) {
-          $rc = !CertNanny::Logging->error('MSG', "No EE cert found in " . CertNanny::Util->mangle($entry->{location}, 'FILE'));
+          $rc = !CertNanny::Logging->error('MSG', "No EE cert found in " . CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE'));
         } else {
           $EECert->{CERTINFO} = CertNanny::Util->getCertInfoHash(CERTDATA   => $EECert->{CERTDATA},
                                                                  CERTFORMAT => 'PEM');
@@ -617,18 +612,18 @@ sub installRoots {
               $rc = CertNanny::Util->runCommand(\@cmd)->{RC};
 
               if (!$rc) {
-               CertNanny::Logging->debug('MSG', "install params tmpfile:" .$tmpP12 ." dest file: " .  CertNanny::Util->mangle($entry->{location}, 'FILE'));
+               CertNanny::Logging->debug('MSG', "install params tmpfile:" .$tmpP12 ." dest file: " .  CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE'));
                 # Everything ok. Let's replace the old PKCS12
                 $rc = !$self->k_saveInstallFile({SRCFILE     => $tmpP12,
-                                                 DSTFILE     => CertNanny::Util->mangle($entry->{location}, 'FILE'),
+                                                 DSTFILE     => CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE'),
                                                  DESCRIPTION => 'PKCS12 keystore replacement'});
                 if ($rc) {
                   CertNanny::Logging->error('MSG', "Could not install new keystore");
                 } else {
                   $self->{hook}->{Type}   .= 'LOCATION' . ',';
-                  $self->{hook}->{File}   .= CertNanny::Util->mangle($entry->{location}, 'FILE') . ',';
+                  $self->{hook}->{File}   .= CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE') . ',';
                   $self->{hook}->{FP}     .= '-' . ',';
-                  $self->{hook}->{Target} .= CertNanny::Util->mangle($entry->{location}, 'FILE') . ',';
+                  $self->{hook}->{Target} .= CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE') . ',';
                 }
               }
             }
@@ -705,19 +700,19 @@ sub getCertLocation {
 
   if ($args{TYPE}  eq 'TrustedRootCA') {
     foreach ('Directory', 'File', 'ChainFile') {
-      if (my $location = CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{$_}, 'FILE')) {
+      if (my $location = CertNanny::Util->mangle(VALUE => $entry->{TrustedRootCA}->{GENERATED}->{$_}, MANGLE => 'FILE')) {
        CertNanny::Logging->debug('MSG', 'getCertLocation(): found location: '. $_);
         $rc->{lc($_)} = $location;
       }
     }
-    if (my $location = CertNanny::Util->mangle($entry->{location}, 'FILE')) {
+    if (my $location = CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE')) {
      CertNanny::Logging->debug('MSG', 'getCertLocation(): found location: '. $location);
       $rc->{location} = $location;
     }
   }
   if ($args{CAChain}) {
     foreach ('Directory', 'File') {
-      if (my $location = CertNanny::Util->mangle($entry->{CAChain}->{GENERATED}->{$_}, 'FILE')) {
+      if (my $location = CertNanny::Util->mangle(VALUE => $entry->{CAChain}->{GENERATED}->{$_}, MANGLE => 'FILE')) {
         $rc->{lc($_)} = $location;
       }
     }
@@ -751,7 +746,7 @@ sub _buildOpenSSLPKCS12Cmd {
   my $rc = 0;
   
   my $openssl    = $config->get('cmd.openssl', 'CMD');
-  $args{-in}       ||= '"'.CertNanny::Util->mangle($entry->{location}, 'FILE').'"';
+  $args{-in}       ||= '"'.CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE').'"';
   $ENV{PASSWORD} = $args{-password} || $self->_getPin();
   $ENV{PASSOUT}  = $args{-passout}  || $self->_getPin();
   $ENV{PASSIN}   = $args{-passin}   || $self->_getPin();

@@ -820,10 +820,10 @@ sub getInstalledCAs {
   $ignoreCertHashes{$certDigest->{'CERTDIGEST'}} = $certDigest->{'CERTDIGEST'} ;    
 
   if (!defined($args{TARGET}) or ($args{TARGET} eq 'LOCATION')) {
-    if (defined(my $locName = CertNanny::Util->mangle($entry->{location}, 'FILE'))) {
+    if (defined(my $locName = CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'MANGLE => FILE'))) {
       $locName .= ".kdb";
       if (!-r "$locName") {
-        $locName = CertNanny::Util->mangle($entry->{location}, 'FILE');
+        $locName = CertNanny::Util->mangle(VALUE => $entry->{location}, 'FILE');
       }
 
       my ($certRef, @certList, $certData, $certDigest, $certAlias, $certCreateDate, $certType, $certFingerprint);
@@ -1290,17 +1290,17 @@ sub getCertLocation {
 
   if ($args{TYPE} eq 'TrustedRootCA') {
     foreach ('Directory', 'File', 'ChainFile') {
-      if (my $location = CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{$_}, 'FILE')) {
+      if (my $location = CertNanny::Util->mangle(VALUE => $entry->{TrustedRootCA}->{GENERATED}->{$_}, MANGLE => 'FILE')) {
         $rc->{lc($_)} = $location;
       }
     }
-    if (my $location = CertNanny::Util->mangle($entry->{location}, 'FILE')) {
+    if (my $location = CertNanny::Util->mangle(VALUE => $entry->{location}, MANGLE => 'FILE')) {
       $rc->{location} = $location;
     }
   }
   if ($args{CAChain}) {
     foreach ('Directory', 'File') {
-      if (my $location = CertNanny::Util->mangle($entry->{CAChain}->{GENERATED}->{$_}, 'FILE')) {
+      if (my $location = CertNanny::Util->mangle(VALUE => $entry->{CAChain}->{GENERATED}->{$_}, MANGLE => 'FILE')) {
         $rc->{lc($_)} = $location;
       }
     }

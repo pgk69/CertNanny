@@ -615,8 +615,8 @@ sub k_checkclearState {
 
   # clean state entry
   if ($forceClear || $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} == 0) {
-    foreach my $entry (qw( CERTFILE KEYFILE REQUESTFILE TEMPKEYSTORE )) {
-      CertNanny::Logging->debug('MSG', 'Wiping'.$self->{STATE}->{DATA}->{RENEWAL}->{$entry});
+    foreach my $entry (qw( CERTFILE KEYFILE REQUESTFILE TEMPKEYSTORE SSCEPCONF )) {
+      CertNanny::Logging->debug('MSG', 'Wiping'.$self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry});
       CertNanny::Util->wipe(FILE => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}, SECURE => 1);
     }
 
@@ -1051,7 +1051,7 @@ sub k_renew {
     }
   } ## end while ($laststate ne $self...)
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Sending request");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Renewal");
   return $rc;
 } ## end sub k_renew
 
@@ -2049,37 +2049,18 @@ sub _sendRequest_initialEnrollment {
   }
 
   CertNanny::Logging->debug('MSG', "Importing p12 <$p12File> into the final location.");
-  # we need a keystore handler for calling the keystroe specific importP12
-  my $handler;
-  eval "\$handler = new CertNanny::Keystore::$keystoretype(\%{\$entry->{target}->{args}})";
-  if (!ref($handler)) {
-    CertNanny::Logging->error('MSG', "Could not initialize keystore handler '$keystoretype' for keystore '$entryname': $handler");
-    return;
-  }
-  
-  if ($handler->importP12(FILE      => $p12File,
-                          PIN       => $entry->{target}->{key}->{pin},
-                          ENTRYNAME => $entryname,
-                          ENTRY     => $entry,
-                          CONF      => $config)) {
+  my %p12args = (FILE      => $p12File,
+                 PIN       => $entry->{target}->{key}->{pin},
+                 ENTRYNAME => $entryname,
+                 ENTRY     => $entry,
+                 CONF      => $config);
+  eval "CertNanny::Keystore::${keystoretype}->importP12(%p12args)";
+  if ($@) {
     CertNanny::Logging->error('MSG', "Could not execute $keystoretype keystore importP12 function. Aborted. $@");
     return;
     # croak "Could not execute $target keystore importP12 function. Aborted. $@";
     # $rc = 0;
   }
-
-#  my %p12args = (FILE      => $p12File,
-#                 PIN       => $entry->{target}->{key}->{pin},
-#                 ENTRYNAME => $entryname,
-#                 ENTRY     => $entry,
-#                 CONF      => $config);
-#  eval "CertNanny::Keystore::${keystoretype}::importP12(%p12args)";
-#  if ($@) {
-#    CertNanny::Logging->error('MSG', "Could not execute $keystoretype keystore importP12 function. Aborted. $@");
-#    return;
-#    # croak "Could not execute $target keystore importP12 function. Aborted. $@";
-#    # $rc = 0;
-#  }
 
   CertNanny::Logging->debug('MSG', "P12 creation and import of <$p12File> completed. Clean up after initial enrollment and p12 import.");
   if ($entry->{initialenroll}->{auth}->{mode} eq "password" or
@@ -2110,6 +2091,7 @@ sub _sendRequest {
   my $rc;
 
   if ($self->k_getAvailableCaCerts()) {
+    $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{SSCEPCONF} = $entry->{ENROLLER}->{config_filename};
     $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE} ||= File::Spec->catfile($entry->{statedir}, $entryname . "-cert.pem");
     my $newcertfile = $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{CERTFILE};
     my $requestfile = $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{REQUESTFILE};

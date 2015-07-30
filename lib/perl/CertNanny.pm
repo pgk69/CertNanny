@@ -540,7 +540,6 @@ sub do_enroll {
           my $newentry                           = clone($entry);
           # save the values of the target entry for later use
           $newentry->{target}                    = $entry;
-          $newentry->{target}->{args}            = \%args;
           # This is an new enrollment keystore, set parameters
           delete($newentry->{statefile});
           $newentry->{initialenroll}->{activ}    = '1';

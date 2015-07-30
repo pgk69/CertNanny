@@ -155,7 +155,7 @@ sub new {
     } ## end if ($entry->{hsm}->{type})
     #$self->{CERT} = $self->{INSTANCE}->getCert();
 
-    my $chainfile = CertNanny::Util->mangle($entry->{CAChain}->{GENERATED}->{File}, 'FILE');
+    my $chainfile = CertNanny::Util->mangle(VALUE => $entry->{CAChain}->{GENERATED}->{File}, MANGLE => 'FILE');
     if($chainfile ne ''){
       unless (-e $chainfile){
       CertNanny::Logging->debug('MSG', "Cert chain file defined but doesn not exist $chainfile , force generation");
@@ -561,7 +561,7 @@ sub getCertLocation {
 
   if ($args{TYPE}  eq 'TrustedRootCA') {
     foreach ('Directory', 'File', 'ChainFile') {
-      if (my $location = CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{$_}, 'FILE')) {
+      if (my $location = CertNanny::Util->mangle(VALUE => $entry->{TrustedRootCA}->{GENERATED}->{$_}, MANGLE => 'FILE')) {
         CertNanny::Logging->debug('MSG', 'getCertLocation(): found location: '. $_);
         $rc->{lc($_)} = $location;
       }
@@ -569,7 +569,7 @@ sub getCertLocation {
   }
 #  if ($args{CAChain}) {
 #    foreach ('Directory', 'File') {
-#      if (my $location = CertNanny::Util->mangle($entry->{CAChain}->{GENERATED}->{$_}, 'FILE')) {
+#      if (my $location = CertNanny::Util->mangle(VALUE => $entry->{CAChain}->{GENERATED}->{$_}, MANGLE => 'FILE')) {
 #        $rc->{lc($_)} = $location;
 #      }
 #    }
@@ -1152,9 +1152,9 @@ sub getInstalledCAs {
   #if no root ca location defined return only an empty hash
   my $rc = {};
   
-  my %locSearch = ('directory' => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{Directory}, 'FILE'),
-                   'file'      => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{File},      'FILE'),
-                   'chainfile' => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{ChainFile}, 'FILE'));
+  my %locSearch = ('directory' => CertNanny::Util->mangle(VALUE => $entry->{TrustedRootCA}->{GENERATED}->{Directory}, MANGLE => 'FILE'),
+                   'file'      => CertNanny::Util->mangle(VALUE => $entry->{TrustedRootCA}->{GENERATED}->{File},      MANGLE => 'FILE'),
+                   'chainfile' => CertNanny::Util->mangle(VALUE => $entry->{TrustedRootCA}->{GENERATED}->{ChainFile}, MANGLE => 'FILE'));
 
   my ($certRef, $certData, $certDigest);
   $self->{installedRootCAs} = {};
@@ -1228,9 +1228,9 @@ sub installRoots {
   my $entryname = $options->{ENTRYNAME};
   my $config    = $options->{CONFIG};
 
-  my %locInstall = ('directory' => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{Directory}, 'FILE'),
-                    'file'      => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{File},      'FILE'),
-                    'chainfile' => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{ChainFile}, 'FILE'));
+  my %locInstall = ('directory' => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{Directory}, MANGLE => 'FILE'),
+                    'file'      => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{File},      MANGLE => 'FILE'),
+                    'chainfile' => CertNanny::Util->mangle($entry->{TrustedRootCA}->{GENERATED}->{ChainFile}, MANGLE => 'FILE'));
 
   my $rc = 0;
 
@@ -1350,7 +1350,7 @@ sub installCertChain {
   
   my $rc = 0;
 
-  my %locInstall = ('file' => CertNanny::Util->mangle($entry->{CAChain}->{GENERATED}->{File}, 'FILE'));
+  my %locInstall = ('file' => CertNanny::Util->mangle(VALUE => $entry->{CAChain}->{GENERATED}->{File}, MANGLE => 'FILE'));
           
      # write file: Writes all certificates in one PEM file / Chainfile
     if (defined($locInstall{'file'}) or defined($locInstall{'chainfile'})) {
