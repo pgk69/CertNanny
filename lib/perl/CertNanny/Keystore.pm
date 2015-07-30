@@ -2050,11 +2050,12 @@ sub _sendRequest_initialEnrollment {
   }
 
   CertNanny::Logging->debug('MSG', "Importing p12 <$p12File> into the final location.");
-  eval "CertNanny::Keystore::${keystoretype}::importP12(FILE      => $p12File,
-                                                        PIN       => $entry->{initialenroll}->{target}->{pin},
-                                                        ENTRYNAME => $entryname,
-                                                        ENTRY     => $entry,
-                                                        CONF      => $config)";
+  my %p12args = (FILE      => $p12File,
+                 PIN       => $entry->{initialenroll}->{target}->{pin},
+                 ENTRYNAME => $entryname,
+                 ENTRY     => $entry,
+                 CONF      => $config);
+  eval "CertNanny::Keystore::${keystoretype}::importP12(%p12args)";
   if ($@) {
     CertNanny::Logging->error('MSG', "Could not execute $keystoretype keystore importP12 function. Aborted. $@");
     return;
