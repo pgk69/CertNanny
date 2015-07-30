@@ -359,17 +359,17 @@ sub importP12 {
   # import pkcs12 file
   # 
   # Input: caller must provide a hash ref:
-  #           FILENAME     => mandatory: 'path/file.p12'
-  #           PIN          => mandatory: 'file pin'
-  #           ENTRYNAME    => optional:  'capi'
-  #           CONF         => optional:  Certnanny Configurationhashref
-  #			  ENTRY         => optional:  Certnanny ENTRY hashref
+  #           FILE      => mandatory: 'path/file.p12'
+  #           PIN       => mandatory: 'file pin'
+  #           ENTRYNAME => optional:  'capi'
+  #           CONF      => optional:  Certnanny Configurationhashref
+  #			      ENTRY     => optional:  Certnanny ENTRY hashref
   # 
   # Output: caller gets a hash ref:
   #           FILENAME    => created pkcs12 file to create
   # 
   # examples:
-  # $self->importP12({FILENAME => 'foo.p12', PIN => 'secretpin'});
+  # $self->importP12({FILE => 'foo.p12', PIN => 'secretpin'});
   # 
   # Import a p12 with private key and certificate into target keystore
   # also adding the certificate chain if required / included.
@@ -391,16 +391,16 @@ sub importP12 {
   my $config    =  $args{CONFIG};
   #CertNanny::Logging->debug('MSG',  "import pkcs12 file entry". Dumper($entry));
  
-  my $origin = File::Spec->canonpath($args{FILENAME}); 
+  my $origin = File::Spec->canonpath($args{FILE}); 
   my $dest = File::Spec->canonpath($entry->{initialenroll}->{target}->{location});
   CertNanny::Logging->debug('MSG', "origin: $origin dest: $dest ");
   
   if(! copy($origin,$dest)){
-  	 CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILENAME} ");
+  	 CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILE} ");
 #  if (!CertNanny::Util->writeFile(DSTFILE    => $entry->{initialenroll}->{target}->{location},
-#                                 SRCFILE => $args{FILENAME} ,
+#                                 SRCFILE => $args{FILE} ,
 #                                  FORCE      => 0)) {
-#    CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILENAME} ");
+#    CertNanny::Logging->error('MSG', "Could not write new p12 Keystore, file already exists ?!$entry->{location} to $args{FILE} ");
     CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " import pkcs12 file");
     return undef;
   }

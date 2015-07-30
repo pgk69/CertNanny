@@ -2050,7 +2050,7 @@ sub _sendRequest_initialEnrollment {
   }
 
   CertNanny::Logging->debug('MSG', "Importing p12 <$p12File> into the final location.");
-  eval "CertNanny::Keystore::${keystoretype}::importP12(FILENAME  => $p12File,
+  eval "CertNanny::Keystore::${keystoretype}::importP12(FILE      => $p12File,
                                                         PIN       => $entry->{initialenroll}->{target}->{pin},
                                                         ENTRYNAME => $entryname,
                                                         ENTRY     => $entry,
