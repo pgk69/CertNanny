@@ -249,7 +249,7 @@ sub _dump_value {
 
 
 sub do_dump {
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Dump");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Dump command");
   my $self = (shift)->getInstance();
   my %args = (@_);
 
@@ -355,13 +355,13 @@ sub do_dump {
     CertNanny::Logging->Err('STR', "Missing Argument: --object cfg|data|key|cert   specifies the object to be dumped\n");
   }
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Dump");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Dump command");
   return 1;
 } ## end sub do_cfgdump
 
 
 sub do_check {
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Check");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Check command");
   my $self = (shift)->getInstance();
   my %args = (@_);
 
@@ -416,13 +416,13 @@ sub do_check {
     }
   }
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Check");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Check command");
   return $rc;
 } ## end sub do_check
 
 
 sub do_renew {
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Renew");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Renew command");
   my $self   = (shift)->getInstance();
   my %args = (@_);
   my %args = (MODE => 'SCHEDULED',
@@ -449,7 +449,7 @@ sub do_renew {
     }
   }
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Renew");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Renew command");
   return 1;
 } ## end sub do_renew
 
@@ -507,7 +507,7 @@ sub _enroll_file {
 
 
 sub do_enroll {
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Enrollment");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Enroll command");
   my $self      = (shift)->getInstance();
   my %args      = (@_);
   
@@ -519,9 +519,9 @@ sub do_enroll {
   if (defined($entry->{initialenroll}->{activ})) {
     CertNanny::Logging->info('MSG', "Keystore <$entryname>: Initial enrollment already activ.");
   } else {
-    if (defined($args{KEYSTORE})) {
+    if (defined($args{KEYSTORE}) && ($args{MODE} ne 'FORCED')) {
       # NO KEYSTORE in %args allowed, since enrollment on an existing Keystore ist not supported!!!
-      CertNanny::Logging->error('MSG', "Keystore <$entryname>: Initial enrollment on an existing keystore is not supported.");
+      CertNanny::Logging->error('MSG', "Keystore <$entryname>: Initial enrollment on an existing keystore must be forced to be executed.");
     } else {
       CertNanny::Logging->debug('MSG', "Keystore <$entryname>: Check for initial enrollment configuration.");
       if (defined($args{METHODE} = $entry->{initialenroll}->{auth}->{mode})) {
@@ -566,13 +566,13 @@ sub do_enroll {
     }
   }
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Enrollment");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Enroll command");
   return $rc;
 } ## end sub do_enroll
 
 
 sub do_cleanup {
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " CleanUp");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " CleanUp command");
   my $self = (shift)->getInstance();
   my %args = (@_);
   my $keystore  = $args{KEYSTORE};
@@ -584,13 +584,13 @@ sub do_cleanup {
 
   $instance->k_checkclearState(1);
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " CleanUp");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " CleanUp command");
   return 1;
 } ## end sub do_info
 
 
 sub do_updateRootCA {
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Update Root CA");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Update Root CA command");
   my $self = (shift)->getInstance();
   my %args = (@_);
 
@@ -652,13 +652,13 @@ sub do_executeHook {
     CertNanny::Logging->Out('STR', "No hook specified for keystore <$entryname> executeHook operation\n");
   }
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Info");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Update Root CA command");
   return 1;
 } ## end sub do_info
 
 
 sub do_test {
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Test");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Test command");
   my $self = (shift)->getInstance();
   my %args = (@_);
 
@@ -714,7 +714,7 @@ sub do_test {
     }
   }
 
-  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Test");
+  CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " Test command");
   return 1;
 } ## end sub do_test
 
