@@ -496,16 +496,10 @@ sub k_storeState {
   
   my $file = $self->{OPTIONS}->{ENTRY}->{statefile};
   my $tmpFile = "$file.$$";
-  my $bakFile = "$file.bak";
+  my $bakFile = "$file.$$.backup";
 
   # store internal state if we have a statefile and the DATA structure is present
   if (defined($file) && ($file ne '') && ref $self->{STATE}->{DATA}) {
-    if ($onError) {
-      # We did exit on an error. Therefore we decrement Selfhealingcounter;
-      if (defined($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}) && $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} > 0) {
-        $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}--;
-      }
-    }
 
     my $dump = Data::Dumper->new([$self->{STATE}->{DATA}], [qw($self->{STATE}->{DATA})]);
 
@@ -573,25 +567,29 @@ sub k_retrieveState {
 
   if (defined($file) && ($file ne '')) {
     if (-r $file) {
-      $self->{STATE}->{DATA} = undef;
+      if (-z $file) {
+        eval {File::Copy::move($file, "$file.$$.error") if $self->{OPTIONS}->{ENTRY}->{selfhealing};};
+        CertNanny::Logging->debug('MSG', "Could not read state file <$file>.");
+        croak "Filesize of the state file <$file> is zero!";
+      }
 
+      $self->{STATE}->{DATA} = undef;
       my $fh;
       if (!open $fh, '<', $file) {
+        eval {File::Copy::move($file, "$file.$$.error") if $self->{OPTIONS}->{ENTRY}->{selfhealing};};
         CertNanny::Logging->debug('MSG', "Could not read state file <$file>.");
-        return;
-        croak "Could not read state file $file";
+        croak "Could not read state file <$file>";
       }
-      eval do {local $/; <$fh>};
+      eval {eval do {local $/; <$fh>};};
 
-      if (!defined $self->{STATE}->{DATA}) {
-        CertNanny::Logging->debug('MSG', "Could not read state from state file <$file>.");
-        return;
-        croak "Could not read state from file $file";
+      if ($@ || !defined $self->{STATE}->{DATA}) {
+        eval {File::Copy::move($file, "$file.$$.error") if $self->{OPTIONS}->{ENTRY}->{selfhealing};};
+        CertNanny::Logging->debug('MSG', "Data corrupted in state file <$file>. State file saved to <$file.$$.error>");
+        $self->k_checkclearState(1);
+        croak "Data corrupted in state file <$file>.";
       }
+      close($fh);
     } ## end if (-r $file)
-    if (!defined($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT})) {
-      $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} = $self->{OPTIONS}->{ENTRY}->{selfhealing} || -1;
-    }
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " retrieve stored CertNanny state");
@@ -612,11 +610,10 @@ sub k_checkclearState {
   my $self = shift;
   my $forceClear = shift || 0;
 
-  $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}-- if ($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} > 0);
-
   # clean state entry
-  if ($forceClear || $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} == 0) {
+  if ($forceClear) {
     foreach my $entry (qw( CERTFILE KEYFILE REQUESTFILE SSCEPCONF )) {
+      next if (!$forceClear && (($entry eq 'REQUESTFILE') || ($entry eq 'KEYFILE')));
       CertNanny::Logging->debug('MSG', 'Wiping <'.$self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}.'>');
       CertNanny::Util->wipe(FILE => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}, SECURE => 1);
     }
@@ -1027,15 +1024,7 @@ sub k_renew {
         $self->_renewalState("completed");
         $rc = 1;
       } else {
-        my $mode;
-        if ($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} > 1) {
-          $mode = $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}-1;
-          $mode = "I try at next progam call ($mode tries left).";
-        } else {
-          $mode = "I give up and cleanup";
-        }
-        $mode = "I try at next progam call." if ($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} == -1);
-        CertNanny::Logging->error('MSG', "Could not complete sendrequest. $mode");
+        CertNanny::Logging->error('MSG', "Could not complete sendrequest.");
         $self->k_checkclearState(0);
       }
     } elsif ($self->_renewalState() eq "completed") {

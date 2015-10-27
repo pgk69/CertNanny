@@ -955,7 +955,7 @@ sub _generateKeystore {
   }
 
   $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{TEMPKEYSTORE} = $newKeystoreLocation;
-  CertNanny::Logging->debug('MSG', "Temp. Keystore: <$newKeystoreLocation>  Trycounter: <$self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}>");
+  CertNanny::Logging->debug('MSG', "Temp. Keystore: <$newKeystoreLocation>");
 
   return $newKeystoreLocation;
 } ## end sub _generateKeystore

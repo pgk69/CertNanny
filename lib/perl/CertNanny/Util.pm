@@ -1113,7 +1113,6 @@ sub dumpCertInfoHash {
     CertNanny::Logging->Out('STR', $fillup . "--------------------------------------------------------------------------------------------------------------------\n");
     CertNanny::Logging->Out('STR', $fillup . "PKI Status:               <" . (defined($args{PKISTATUS})       ? $args{PKISTATUS}       : 'undefined') . ">\n");
     CertNanny::Logging->Out('STR', $fillup . "Renewal Status:           <" . (defined($args{RENEWALSTATUS})   ? $args{RENEWALSTATUS}   : 'undefined') . ">\n");
-    CertNanny::Logging->Out('STR', $fillup . "Renewal Try Count:        <" . (defined($args{RENEWALTRYCOUNT}) ? $args{RENEWALTRYCOUNT} : 'undefined') . ">\n");
   }
 } ## end sub dumpCertInfoHash
 

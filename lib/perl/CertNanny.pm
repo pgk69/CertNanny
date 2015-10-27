@@ -341,8 +341,7 @@ sub do_dump {
                                                 'SSCEPSTATUS',     $instance->{STATE}->{DATA}->{SCEP}->{SSCEPSTATUS},
                                                 'PKISTATUS',       $instance->{STATE}->{DATA}->{SCEP}->{PKISTATUS},
                                                 'TRANSACTIONID',   $instance->{STATE}->{DATA}->{SCEP}->{TRANSACTIONID},
-                                                'RENEWALSTATUS',   $instance->{STATE}->{DATA}->{RENEWAL}->{STATUS},
-                                                'RENEWALTRYCOUNT', $instance->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT});
+                                                'RENEWALSTATUS',   $instance->{STATE}->{DATA}->{RENEWAL}->{STATUS});
           }
         }
       }
@@ -582,7 +581,11 @@ sub do_cleanup {
   my $entryname = $options->{ENTRYNAME};
   my $config    = $options->{CONFIG};
 
-  $instance->k_checkclearState(1);
+  if ($self->getOption('force')) {
+    $instance->k_checkclearState(0);
+  } else {
+    $instance->k_checkclearState(1);
+  }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " CleanUp command");
   return 1;
