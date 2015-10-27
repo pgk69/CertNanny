@@ -36,7 +36,7 @@ use Exporter;
 @EXPORT = qw(runCommand timeStamp isoDateToEpoch epochToIsoDate expandString 
              expandDate printableIsoDate readFile writeFile getCertSHA1
              getCertFormat getCertInfoHash getCSRInfoHash parseCertData 
-             getTmpFile forgetTmpFile staticEngine encodeBMPString writeOpenSSLConfig 
+             getTmpFile forgetTmpFile wipe staticEngine encodeBMPString writeOpenSSLConfig 
              getDefaultOpenSSLConfig backoffTime getMacAddresses 
              fetchFileList callOpenSSL os_type is_os_type setVariable
              unsetVariable osq dumpCertInfoHash Exit);    # Symbols to autoexport (:DEFAULT tag)
@@ -1491,6 +1491,53 @@ sub is_os_type {
   return unless $type;
   $os = $^O unless defined $os;
   return os_type($os) eq $type;
+}
+
+sub wipe {
+  # Input: caller must provide a hash ref:
+  #           FILE   => mandatory: File to be deleted
+  #           SECURE => optional: 0: normal deletion (default)
+  #                               1: secure deletion
+  #           '00'   => optional: Fillpattern for the first secure deletion run (default 0x0)
+  #           'FF'   => optional: Fillpattern for the second secure deletion run (default 0xFF)
+  # 
+  # Output: undef : error
+  #             0 : file to delete does not exist
+  #             1 : success 
+  my $self   = (shift)->getInstance();
+  
+  my %args = (FILE   => '',
+              SECURE => '0',
+              '00'   => '00',
+              FF     => 'FF',
+              @_);                   # argument pair list
+  
+  if (-e $args{FILE}) {
+    if ($args{SECURE}) {
+      my $bytes = -s $args{FILE};
+      if ($bytes > 0) {
+        eval {open(FILE, '+<', $args{FILE});
+              seek(FILE, 0, 0);
+              print FILE pack('h*', $args{'00'} x $bytes);
+              close(FILE);
+              open(FILE, '+<', $args{FILE});
+              seek(FILE, 0, 0);
+              print FILE pack('h*', $args{FF} x $bytes);
+              close(FILE);};
+        if ($@) {
+          CertNanny::Logging->error('MSG', "Unable to secure overwrite and delete <$args{FILE}>: ", join('', $@));
+          return;
+        }
+      }
+    }
+    if (!unlink $args{FILE}) {
+      CertNanny::Logging->error('MSG', "Unable to delete <$args{FILE}>: ", join('', $@));
+      return;
+    }
+  } else {
+    return 0;
+  }
+  return 1;
 }
 
 1;

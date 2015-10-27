@@ -504,6 +504,11 @@ sub dummy () {
 
 
 sub k_storeState {
+  # Input: onError 0 : Precedure was called during normal processing (Default)
+  #                1 : Procedure was called during DESTROY processing
+  # 
+  # Output: undef : error
+  #             1 : success 
 
   # store last state to statefile if it is defined
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " stored CertNanny state");
@@ -512,9 +517,10 @@ sub k_storeState {
   
   my $file = $self->{OPTIONS}->{ENTRY}->{statefile};
   my $tmpFile = "$file.$$";
-  my $bakFile = "$file.bak";
+  my $bakFile = "$file.$$.backup";
 
-  if (defined($file) && ($file ne '')) {
+  # store internal state if we have a statefile and the DATA structure is present
+  if (defined($file) && ($file ne '') && ref $self->{STATE}->{DATA}) {
     if ($onError) {
       # We did exit on an error. Therefore we decrement Selfhealingcounter;
       if (defined($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}) && $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} > 0) {
@@ -522,54 +528,63 @@ sub k_storeState {
       }
     }
 
-    # store internal state
-    if (ref $self->{STATE}->{DATA}) {
-      my $dump = Data::Dumper->new([$self->{STATE}->{DATA}], [qw($self->{STATE}->{DATA})]);
+    my $dump = Data::Dumper->new([$self->{STATE}->{DATA}], [qw($self->{STATE}->{DATA})]);
 
-      $dump->Purity(1);
+    $dump->Purity(1);
 
-      my $fh;
-      if (!open $fh, '>', $tmpFile) {
-        return "Error writing Keystore state ($file). Could not write state to tmp. file $tmpFile";
-      }
-      print $fh $dump->Dump;
-      close $fh;
-    
-      if (-e $file) {
-        CertNanny::Logging->debug('MSG', "Statefile <$file> exists. Creating backup <$bakFile>.");
-        if (File::Copy::move($file, $bakFile)) {
-          CertNanny::Logging->debug('MSG', "Moving tmp. statefile <$tmpFile> to <$file>.");
-          if (File::Copy::move($tmpFile, $file)) {
-            CertNanny::Logging->debug('MSG', "Unlinking backupfile <$bakFile>.");
-            eval {unlink($bakFile);};
-          } else {
-            CertNanny::Logging->debug('MSG', "Error moving <$tmpFile> to <$file>. Rollback.");
-            File::Copy::move($bakFile, $file);
-            eval {unlink($tmpFile);};
-            return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
-          }
+    my $fh;
+    if (!open $fh, '>', $tmpFile) {
+      CertNanny::Logging->error('MSG', "Error writing Keystore state <$file>. Could not write state to tmp. file <$tmpFile>");
+      CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " stored CertNanny state");
+      return;
+    }
+    print $fh $dump->Dump;
+    close $fh;
+  
+    if (-e $file) {
+      CertNanny::Logging->debug('MSG', "Statefile <$file> exists. Creating backup <$bakFile>.");
+      if (File::Copy::move($file, $bakFile)) {
+        CertNanny::Logging->debug('MSG', "Moving tmp. statefile <$tmpFile> to <$file>.");
+        if (File::Copy::move($tmpFile, $file)) {
+          CertNanny::Logging->debug('MSG', "Wiping backupfile <$bakFile>.");
+          CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);
         } else {
-          CertNanny::Logging->debug('MSG', "Error creating backup <$bakFile> of state file <$file>");
-          eval {unlink($bakFile);};
-          return "Error creating backup <$bakFile> of state file <$file>";
+          CertNanny::Logging->error('MSG', "Error moving keystore tmp. state file <$tmpFile> to <$file>. Rollback.");
+          File::Copy::move($bakFile, $file);
+          CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);
+          CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " stored CertNanny state");
+          return;
         }
       } else {
-        CertNanny::Logging->debug('MSG', "Statefile <$file> does not exists. No backup needed.");
-        if (!File::Copy::move($tmpFile, $file)) {
-          CertNanny::Logging->debug('MSG', "Error moving keystore tmp. state file <$tmpFile> to <$file>");
-          eval {unlink($tmpFile);};
-          return "Error moving keystore tmp. state file <$tmpFile> to <$file>";
-        }
+        CertNanny::Logging->error('MSG', "Error creating backup <$bakFile> of state file <$file>");
+        CertNanny::Util->wipe(FILE => $bakFile, SECURE => 1);
+        CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " stored CertNanny state");
+        return;
       }
-    } ## end if (ref $self->{STATE}...)
+    } else {
+      CertNanny::Logging->debug('MSG', "Statefile <$file> does not exists. No backup needed.");
+      if (!File::Copy::move($tmpFile, $file)) {
+        CertNanny::Logging->error('MSG', "Error moving keystore tmp. state file <$tmpFile> to <$file>");
+        CertNanny::Util->wipe(FILE => $tmpFile, SECURE => 1);
+        CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " stored CertNanny state");
+        return;
+      }
+    } ## end if (defined($file) && ...
+  } else {
+    CertNanny::Logging->debug('MSG', "Statefile not defined. No state store necessary.")    if (!defined($file) || ($file eq ''));
+    CertNanny::Logging->debug('MSG', "Statefile data not flled. No state store necessary.") if (!ref $self->{STATE}->{DATA});
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " stored CertNanny state");
-  return 0;
+  return 1;
 } ## end sub k_storeState
 
 
 sub k_retrieveState {
+  # Input: -
+  # 
+  # Output: undef : error
+  #             1 : success 
 
   # retrieve last state from statefile if it exists
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " retrieve stored CertNanny state");
@@ -579,17 +594,28 @@ sub k_retrieveState {
 
   if (defined($file) && ($file ne '')) {
     if (-r $file) {
-      $self->{STATE}->{DATA} = undef;
+      if (-z $file) {
+        eval {File::Copy::move($file, "$file.$$.error") if $self->{OPTIONS}->{ENTRY}->{selfhealing};};
+        CertNanny::Logging->debug('MSG', "Could not read state file <$file>.");
+        croak "Filesize of the state file <$file> is zero!";
+      }
 
+      $self->{STATE}->{DATA} = undef;
       my $fh;
       if (!open $fh, '<', $file) {
-        croak "Could not read state file $file";
+        eval {File::Copy::move($file, "$file.$$.error") if $self->{OPTIONS}->{ENTRY}->{selfhealing};};
+        CertNanny::Logging->debug('MSG', "Could not read state file <$file>.");
+        croak "Could not read state file <$file>";
       }
-      eval do {local $/; <$fh>};
+      eval {eval do {local $/; <$fh>};};
 
-      if (!defined $self->{STATE}->{DATA}) {
-        croak "Could not read state from file $file";
+      if ($@ || !defined $self->{STATE}->{DATA}) {
+        eval {File::Copy::move($file, "$file.$$.error") if $self->{OPTIONS}->{ENTRY}->{selfhealing};};
+        CertNanny::Logging->debug('MSG', "Data corrupted in state file <$file>. State file saved to <$file.$$.error>");
+        $self->k_checkclearState(1);
+        croak "Data corrupted in state file <$file>.";
       }
+      close($fh);
     } ## end if (-r $file)
     if (!defined($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT})) {
       $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} = $self->{OPTIONS}->{ENTRY}->{selfhealing} || -1;
@@ -602,9 +628,14 @@ sub k_retrieveState {
 
 
 sub k_checkclearState {
+  # Input: $forceClear 0 : Normal processing (Default)
+  #                    1 : Forces state clearing
+  # 
+  # Output: undef : error
+  #             1 : success 
 
   # checks the number of unsucessfull state operations
-  # if necessary clear statefile and retrieve empty state
+  # if necessary or foreced clear statefile and retrieve empty state
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " check and if necessary, clear CertNanny state");
   my $self = shift;
   my $forceClear = shift || 0;
@@ -613,13 +644,14 @@ sub k_checkclearState {
 
   # clean state entry
   if ($forceClear || $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} == 0) {
-    foreach my $entry (qw( CERTFILE KEYFILE REQUESTFILE TEMPKEYSTORE )) {
-      CertNanny::Logging->debug('MSG', 'Unlinking'.$self->{STATE}->{DATA}->{RENEWAL}->{$entry});
-      eval {unlink $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry};};
+    foreach my $entry (qw( CERTFILE KEYFILE REQUESTFILE SSCEPCONF )) {
+      next if (!$forceClear && (($entry eq 'REQUESTFILE') || ($entry eq 'KEYFILE')));
+      CertNanny::Logging->debug('MSG', 'Wiping <'.$self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}.'>');
+      CertNanny::Util->wipe(FILE => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}, SECURE => 1);
     }
 
     # delete state file
-    eval {unlink $self->{OPTIONS}->{ENTRY}->{statefile};};
+    CertNanny::Util->wipe(FILE => $self->{OPTIONS}->{ENTRY}->{statefile}, SECURE => 1);
 
     $self->{STATE}->{DATA} = undef;
   }

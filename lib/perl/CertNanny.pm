@@ -796,7 +796,11 @@ sub do_cleanup {
   my $entryname = $options->{ENTRYNAME};
   my $config    = $options->{CONFIG};
 
-  $instance->k_checkclearState(1);
+  if ($self->getOption('force')) {
+    $instance->k_checkclearState(0);
+  } else {
+    $instance->k_checkclearState(1);
+  }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " CleanUp");
   return 1;
