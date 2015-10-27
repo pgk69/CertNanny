@@ -521,12 +521,6 @@ sub k_storeState {
 
   # store internal state if we have a statefile and the DATA structure is present
   if (defined($file) && ($file ne '') && ref $self->{STATE}->{DATA}) {
-    if ($onError) {
-      # We did exit on an error. Therefore we decrement Selfhealingcounter;
-      if (defined($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}) && $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} > 0) {
-        $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}--;
-      }
-    }
 
     my $dump = Data::Dumper->new([$self->{STATE}->{DATA}], [qw($self->{STATE}->{DATA})]);
 
@@ -617,9 +611,6 @@ sub k_retrieveState {
       }
       close($fh);
     } ## end if (-r $file)
-    if (!defined($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT})) {
-      $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} = $self->{OPTIONS}->{ENTRY}->{selfhealing} || -1;
-    }
   }
 
   CertNanny::Logging->debug('MSG', (eval 'ref(\$self)' ? "End " : "Start ") . (caller(0))[3] . " retrieve stored CertNanny state");
@@ -640,12 +631,9 @@ sub k_checkclearState {
   my $self = shift;
   my $forceClear = shift || 0;
 
-  $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT}-- if ($self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} > 0);
-
   # clean state entry
-  if ($forceClear || $self->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT} == 0) {
+  if ($forceClear) {
     foreach my $entry (qw( CERTFILE KEYFILE REQUESTFILE SSCEPCONF )) {
-      next if (!$forceClear && (($entry eq 'REQUESTFILE') || ($entry eq 'KEYFILE')));
       CertNanny::Logging->debug('MSG', 'Wiping <'.$self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}.'>');
       CertNanny::Util->wipe(FILE => $self->{STATE}->{DATA}->{RENEWAL}->{REQUEST}->{$entry}, SECURE => 1);
     }

@@ -321,8 +321,7 @@ sub do_dump {
                                                 'SSCEPSTATUS',     $instance->{STATE}->{DATA}->{SCEP}->{SSCEPSTATUS},
                                                 'PKISTATUS',       $instance->{STATE}->{DATA}->{SCEP}->{PKISTATUS},
                                                 'TRANSACTIONID',   $instance->{STATE}->{DATA}->{SCEP}->{TRANSACTIONID},
-                                                'RENEWALSTATUS',   $instance->{STATE}->{DATA}->{RENEWAL}->{STATUS},
-                                                'RENEWALTRYCOUNT', $instance->{STATE}->{DATA}->{RENEWAL}->{TRYCOUNT});
+                                                'RENEWALSTATUS',   $instance->{STATE}->{DATA}->{RENEWAL}->{STATUS});
           }
         }
       }
